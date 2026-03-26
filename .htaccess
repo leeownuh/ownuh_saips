@@ -1,0 +1,87 @@
+# Ownuh SAIPS — Apache Configuration (Production-hardened)
+
+Options -Indexes
+ServerSignature Off
+
+# ── Block access to sensitive directories and files ───────────────────────────
+RewriteEngine On
+
+# Block .env and config files
+RewriteRule ^backend/config/\.env$           - [F,L]
+RewriteRule ^backend/config/                 - [F,L]
+RewriteRule ^database/seed\.sql$             - [F,L]
+RewriteRule ^database/test_seed\.sql$        - [F,L]
+RewriteRule ^database/patch_audit_seed\.sql$ - [F,L]
+
+# Block entire keys/ directory (private key must be outside webroot in production)
+RewriteRule ^keys/                           - [F,L]
+
+# Block .git, composer files, docs, tests
+RewriteRule ^\.git/                          - [F,L]
+RewriteRule ^composer\.(json|lock)$          - [F,L]
+RewriteRule ^(README|DEPLOYMENT|DATABASE|SECURITY|API|QUICKSTART|todo)\.md$ - [F,L]
+RewriteRule ^tests/                          - [F,L]
+RewriteRule ^\.agent_hooks/                  - [F,L]
+
+
+# ── Security Headers ─────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # HSTS — requires HTTPS. Enable in production (after confirming HTTPS works):
+    Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+
+    # Remove server identification headers
+    Header always unset X-Powered-By
+    Header always unset Server
+</IfModule>
+
+# ── Force HTTPS in production ─────────────────────────────────────────────────
+# Uncomment when HTTPS certificate is in place:
+# RewriteCond %{HTTPS} off
+# RewriteCond %{HTTP_HOST} !^localhost
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# ── PHP settings (secure defaults) ───────────────────────────────────────────
+<IfModule mod_php.c>
+    php_flag  display_errors        Off
+    php_flag  display_startup_errors Off
+    php_flag  log_errors            On
+    php_value error_log             logs/php_errors.log
+    php_value session.cookie_httponly 1
+    php_value session.cookie_secure   0
+    # NOTE: bootstrap.php sets cookie_secure dynamically based on HTTPS detection
+    php_value session.use_strict_mode 1
+    php_value session.use_only_cookies 1
+    php_flag  expose_php            Off
+</IfModule>
+
+<IfModule mod_php8.c>
+    php_flag  display_errors        Off
+    php_flag  display_startup_errors Off
+    php_flag  log_errors            On
+    php_value error_log             logs/php_errors.log
+    php_value session.cookie_httponly 1
+    php_value session.cookie_secure   0
+    # NOTE: bootstrap.php sets cookie_secure dynamically based on HTTPS detection
+    php_value session.use_strict_mode 1
+    php_value session.use_only_cookies 1
+    php_flag  expose_php            Off
+</IfModule>
+
+# ── Directory index ───────────────────────────────────────────────────────────
+DirectoryIndex login.php
+
+# ── Custom error pages ────────────────────────────────────────────────────────
+ErrorDocument 400 /auth-404.html
+ErrorDocument 401 /auth-401.html
+ErrorDocument 403 /auth-401.html
+ErrorDocument 404 /auth-404.html
+ErrorDocument 500 /auth-500.html
+ErrorDocument 502 /auth-500.html
+ErrorDocument 503 /under-maintenance.html
+ErrorDocument 504 /under-maintenance.html

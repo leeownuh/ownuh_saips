@@ -1,0 +1,4 @@
+# Block all web access to log files
+<FilesMatch ".*">
+    Require all denied
+</FilesMatch>

@@ -1,0 +1,13 @@
+{
+    "name": "ownuh/saips",
+    "description": "Secure Authentication & Intrusion Prevention System",
+    "type": "project",
+    "autoload": {
+        "psr-4": {
+            "SAIPS\\": "backend/"
+        }
+    },
+    "require": {
+        "php": ">=8.0"
+    }
+}

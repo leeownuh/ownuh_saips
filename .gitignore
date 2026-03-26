@@ -1,0 +1,26 @@
+# Environment & secrets
+backend/config/.env
+keys/private.pem
+keys/public.pem
+
+# Debug files
+debug_*.php
+summarized_conversations/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+/var/log/
+
+# PHP vendor (committed in this repo for portability)
+# vendor/   ← intentionally kept committed
+
+# Compiled assets (kept as-is)
+# assets/   ← intentionally kept committed
