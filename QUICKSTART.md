@@ -1,102 +1,133 @@
-# Ownuh SAIPS — Quick Start
+# Ownuh SAIPS - Quick Start
 
 ## Windows (XAMPP or Laragon)
 
-### Step 1 — Install a local server stack
-Pick one:
-- **XAMPP** (recommended): https://www.apachefriends.org/ — installs Apache + PHP + MySQL
-- **Laragon**: https://laragon.org/ — lightweight, auto-detects PHP/MySQL
+### 1. Install a local stack
 
-### Step 2 — Place the project files
-Copy the `ownuh_saips_fixed` folder into your web root:
-- XAMPP → `C:\xampp\htdocs\ownuh_saips_fixed\`
-- Laragon → `C:\laragon\www\ownuh_saips_fixed\`
+- XAMPP: https://www.apachefriends.org/
+- Laragon: https://laragon.org/
 
-### Step 3 — Run the setup script
+### 2. Place the project
 
-**Option A — PowerShell (recommended)**
+```text
+XAMPP   -> C:\xampp\htdocs\ownuh_saips_fixed
+Laragon -> C:\laragon\www\ownuh_saips_fixed
+```
+
+### 3. Run setup
+
+#### PowerShell
+
 ```powershell
 cd C:\xampp\htdocs\ownuh_saips_fixed
 Set-ExecutionPolicy -Scope Process Bypass
 .\setup_windows.ps1
 ```
-The script will ask for your MySQL root password (blank if XAMPP default), then handle everything automatically — databases, schema, seed data, JWT keys, `.env`, and password hashing.
 
-**Option B — Batch file**
-```
+#### Batch
+
+```bat
 cd C:\xampp\htdocs\ownuh_saips_fixed
 setup_windows.bat
 ```
 
-**Option C — Manual (PHP CLI)**
-```
+#### Manual PHP
+
+```bat
 cd C:\xampp\htdocs\ownuh_saips_fixed
 php setup.php
 ```
 
-### Step 4 — Start the server
+### 4. Start the server
 
-The setup script offers to start PHP's built-in server automatically.
-Or start it manually:
-```
+Either:
+
+```bash
 php -S 0.0.0.0:8080
 ```
 
-### Step 5 — Open in browser
-```
+Or start Apache + MySQL from the XAMPP Control Panel.
+
+### 5. Open the app
+
+```text
+# PHP built-in server
 http://localhost:8080/login.php
+
+# XAMPP / Apache
+http://localhost/ownuh_saips_fixed/login.php
 ```
 
-### Step 6 — Log in
+### 6. Log in
+
 | Email | Password | Role |
-|-------|----------|------|
+|---|---|---|
 | `sophia.johnson@acme.com` | `Admin@SAIPS2025!` | Super Admin |
 | `marcus.chen@acme.com` | `Admin@SAIPS2025!` | Admin |
 
-> ⚠ **Change the password immediately after first login.**
+Change the default password immediately after first login.
 
 ---
 
-## ngrok (Share Publicly)
+## ngrok
 
-```
-# In a second terminal / PowerShell window:
-ngrok http 8080
-```
-Copy the `https://xxxx.ngrok-free.app` URL — it works immediately.
-
----
-
-## Linux / macOS
+### Built-in PHP server
 
 ```bash
-bash install.sh          # prompts for MySQL creds, does everything
-php -S 0.0.0.0:8080
+ngrok http 8080
 ```
 
----
+Open:
 
-## If Something Goes Wrong
+```text
+https://xxxx.ngrok-free.app/login.php
+```
 
-| Symptom | Fix |
-|---------|-----|
-| White page / "under maintenance" | MySQL not running — start it in XAMPP Control Panel |
-| "Invalid email or password" after setup | Re-run `php setup.php` — bcrypt hashes may not have been written |
-| Cookie/JWT error in logs | Confirm `keys/private.pem` and `keys/public.pem` exist |
-| 403 on `.env` | Normal — `.htaccess` blocks it intentionally |
-| Session not persisting | PHP session directory must be writable |
+### XAMPP / Apache
+
+```bash
+ngrok http 80
+```
+
+Open:
+
+```text
+https://xxxx.ngrok-free.app/ownuh_saips_fixed/login.php
+```
+
+### Update `backend/config/.env`
+
+```env
+APP_URL=https://xxxx.ngrok-free.app
+TRUSTED_PROXY=any
+COOKIE_SAMESITE=Lax
+APP_TIMEZONE=Asia/Kolkata
+APP_TIMEZONE_LABEL=IST
+```
 
 ---
 
 ## Key Files
 
 | File | Purpose |
-|------|---------|
+|---|---|
 | `login.php` | Sign-in form |
-| `logout.php` | Clears JWT cookie and session |
-| `dashboard.php` | Live dashboard (requires admin login) |
-| `otp-verify.php` | MFA / OTP verification |
-| `setup.php` | First-run setup (delete after use) |
-| `backend/bootstrap.php` | DB class, JWT functions, helpers |
-| `backend/config/.env` | Credentials (auto-generated, git-ignored) |
-| `keys/private.pem` | JWT signing key (auto-generated, git-ignored) |
+| `forgot-password.php` | Request reset link |
+| `reset-password.php` | Token-based password reset page |
+| `auth-create-password.php` | Authenticated password change page |
+| `otp-verify.php` | MFA verification and bypass-token recovery |
+| `users.php` | User management and MFA bypass issuance |
+| `backend/bootstrap.php` | DB class, JWT helpers, session/security helpers |
+| `backend/config/.env` | Environment config |
+
+---
+
+## If Something Goes Wrong
+
+| Symptom | Fix |
+|---|---|
+| White page / maintenance page | Start MySQL from XAMPP |
+| Login fails after setup | Re-run `php setup.php` |
+| Reset link fails | Check `C:\xampp\apache\logs\error.log` and confirm `APP_URL` / path |
+| Session not persisting through ngrok | Set `TRUSTED_PROXY=any` and `COOKIE_SAMESITE=Lax` |
+| Password change says network error | Ensure the real page is `auth-create-password.php`, not the stale static mockup |
