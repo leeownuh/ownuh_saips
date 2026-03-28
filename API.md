@@ -1,8 +1,8 @@
-# API.md — Ownuh SAIPS REST API Reference
+# API.md â€” Ownuh SAIPS REST API Reference
 
 **Base URL:** `https://saips.your-domain.com/api/v1`  
 **Auth:** Bearer JWT (RS256) in `Authorization` header  
-**Transport:** TLS 1.3 only — HTTP connections are rejected  
+**Transport:** TLS 1.3 only â€” HTTP connections are rejected  
 **Rate limits:** See `ips-rate-limits.html` or `rate_limit_config` table
 
 ---
@@ -19,7 +19,7 @@ JWT payload structure:
 ```json
 {
   "sub": "usr-001-...",
-  "email": "sophia.johnson@acme.com",
+  "email": "sophia.johnson@ownuh-saips.com",
   "role": "superadmin",
   "mfa_method": "fido2",
   "iat": 1742400000,
@@ -39,18 +39,18 @@ Access tokens expire in **15 minutes**. Use `/auth/token/refresh` with your refr
 
 Initiates authentication. Returns JWT directly (low risk) or triggers MFA flow (medium/high risk).
 
-**Rate limit:** 60 req/min per IP — 429 + temp block on breach
+**Rate limit:** 60 req/min per IP â€” 429 + temp block on breach
 
 **Request:**
 ```json
 {
-  "email": "sophia.johnson@acme.com",
+  "email": "sophia.johnson@ownuh-saips.com",
   "password": "YourPassword123!",
   "device_fingerprint": "optional-client-fp-hash"
 }
 ```
 
-**Response — Low risk (MFA not required):**
+**Response â€” Low risk (MFA not required):**
 ```json
 {
   "status": "success",
@@ -61,7 +61,7 @@ Initiates authentication. Returns JWT directly (low risk) or triggers MFA flow (
 }
 ```
 
-**Response — Medium risk (MFA required):**
+**Response â€” Medium risk (MFA required):**
 ```json
 {
   "status": "mfa_required",
@@ -71,7 +71,7 @@ Initiates authentication. Returns JWT directly (low risk) or triggers MFA flow (
 }
 ```
 
-**Response — High risk (blocked):**
+**Response â€” High risk (blocked):**
 ```json
 {
   "status": "blocked",
@@ -88,7 +88,7 @@ Initiates authentication. Returns JWT directly (low risk) or triggers MFA flow (
 
 Verifies the MFA code after a `mfa_required` response.
 
-**Rate limit:** 5 req/15 min per user — soft-lock on breach
+**Rate limit:** 5 req/15 min per user â€” soft-lock on breach
 
 **Request:**
 ```json
@@ -154,7 +154,7 @@ Requests a password reset link. Always returns success to prevent username enume
 
 **Request:**
 ```json
-{ "email": "user@example.com" }
+{ "email": "user@ownuh-saips.com" }
 ```
 
 ---
@@ -294,6 +294,52 @@ Export log as CSV. Superadmin only. Export action itself is logged.
 
 ---
 
+## Executive Reporting
+
+Executive reporting is currently delivered through authenticated server-rendered screens and internal services rather than a public REST endpoint.
+
+### `settings-compliance.php`
+
+Provides:
+- live posture metrics
+- AI-generated executive summaries
+- board-style risk and action reporting
+- export triggers for HTML and PDF output
+
+### `executive-report-export.php?format=html|pdf`
+
+Authenticated export endpoint used by the compliance UI.
+
+**Formats:**
+- `html` for browser/shareable output
+- `pdf` for printable executive brief output
+
+**Notes:**
+- output is generated from the same posture snapshot used by the on-screen executive report
+- when `OPENAI_API_KEY` is not configured, report generation falls back to a deterministic local summary
+
+### Weekly report automation
+
+`backend/scripts/send-weekly-executive-report.php` generates the current posture report and emails it to active `admin` and `superadmin` users.
+
+Typical Windows scheduler target:
+
+```bat
+backend\scripts\send-weekly-executive-report.bat
+```
+
+---
+
+## UI Platform Notes
+
+These are not API endpoints, but they are now part of the shared product surface:
+
+- Global header search for fast navigation across dashboard, users, audit, incidents, IPS, sessions, and settings
+- Unified dark-mode handling for page content and sidebar/menu chrome
+- Shared PHP layout partials for header, sidebar, mobile sidebar, and footer scripts
+
+---
+
 ## User Management (Admin+)
 
 ### `GET /users`
@@ -307,7 +353,7 @@ Create a new user account.
 ```json
 {
   "display_name": "Jane Doe",
-  "email": "jane.doe@acme.com",
+  "email": "jane.doe@ownuh-saips.com",
   "role": "user"
 }
 ```

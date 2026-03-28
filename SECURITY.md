@@ -1,4 +1,4 @@
-# SECURITY.md — Ownuh SAIPS Security Policy & Hardening Guide
+# SECURITY.md â€” Ownuh SAIPS Security Policy & Hardening Guide
 
 **Classification:** CONFIDENTIAL  
 **Owner:** Security Officer  
@@ -11,18 +11,20 @@
 The Ownuh SAIPS implements a layered defence model:
 
 ```
-Layer 1: Network       — TLS 1.3, HSTS, WAF, geo-blocking
-Layer 2: Transport     — CSP, CSRF tokens, secure cookies
-Layer 3: Authentication — bcrypt/TOTP/FIDO2/JWT RS256
-Layer 4: Authorisation  — RBAC, session limits, idle timeouts
-Layer 5: Detection      — Brute-force, IP reputation, risk scoring
-Layer 6: Response       — Auto-lockout, IP block, alert dispatch
-Layer 7: Audit          — SHA-256 chained, append-only, tamper-evident
+Layer 1: Network       â€” TLS 1.3, HSTS, WAF, geo-blocking
+Layer 2: Transport     â€” CSP, CSRF tokens, secure cookies
+Layer 3: Authentication â€” bcrypt/TOTP/FIDO2/JWT RS256
+Layer 4: Authorisation  â€” RBAC, session limits, idle timeouts
+Layer 5: Detection      â€” Brute-force, IP reputation, risk scoring
+Layer 6: Response       â€” Auto-lockout, IP block, alert dispatch
+Layer 7: Audit          â€” SHA-256 chained, append-only, tamper-evident
 ```
+
+AI-assisted executive reporting sits on top of these layers as a read-mostly decision-support feature. It summarizes posture data for leadership review, but it does not directly enforce blocks, revoke sessions, or change security state without human action.
 
 ---
 
-## Password Security (SRS §2.2)
+## Password Security (SRS Â§2.2)
 
 | Control | Value | Standard |
 |---------|-------|---------|
@@ -33,15 +35,15 @@ Layer 7: Audit          — SHA-256 chained, append-only, tamper-evident
 | Complexity | 3-of-4 character classes | ISO 27001 |
 | Blacklist | HIBP API + custom dictionary | OWASP |
 | History | Last 12 passwords blocked | PCI DSS |
-| Expiry (standard) | 180 days | — |
+| Expiry (standard) | 180 days | â€” |
 | Expiry (privileged) | 90 days | ISO 27001 |
-| Similarity check | Levenshtein distance vs email/username | — |
+| Similarity check | Levenshtein distance vs email/username | â€” |
 | Plaintext logging | **Never** | All |
 | Storage | Isolated credentials DB, AES-256 at rest | ISO 27001 |
 
 ---
 
-## MFA Requirements (SRS §2.4)
+## MFA Requirements (SRS Â§2.4)
 
 | Role | Required Factor | Notes |
 |------|----------------|-------|
@@ -54,7 +56,7 @@ Layer 7: Audit          — SHA-256 chained, append-only, tamper-evident
 - Algorithm: HMAC-SHA1 (RFC 6238)
 - Digits: 6
 - Period: 30 seconds
-- Tolerance: ±1 step (prevents clock skew failures)
+- Tolerance: Â±1 step (prevents clock skew failures)
 
 ### Backup Codes
 - Count: 10 per user
@@ -64,7 +66,7 @@ Layer 7: Audit          — SHA-256 chained, append-only, tamper-evident
 
 ---
 
-## Session Management (SRS §3.4)
+## Session Management (SRS Â§3.4)
 
 | Parameter | Standard Users | Admin Accounts |
 |-----------|---------------|----------------|
@@ -79,7 +81,7 @@ Layer 7: Audit          — SHA-256 chained, append-only, tamper-evident
 
 ---
 
-## Brute-Force Thresholds (SRS §3.1 & §3.2)
+## Brute-Force Thresholds (SRS Â§3.1 & Â§3.2)
 
 | Trigger | Threshold | Response |
 |---------|-----------|---------|
@@ -88,19 +90,19 @@ Layer 7: Audit          — SHA-256 chained, append-only, tamper-evident
 | Per-IP failures | 20 in 10 min | IP block 60 min |
 | Distributed attack | 100 across IPs in 5 min | WAF rule deployed + security team paged |
 | Credential stuffing | Unusual success rate from new IPs | Sessions invalidated + user email |
-| Progressive delays | After 3 failures: 5s, doubles per failure, cap 60s | — |
+| Progressive delays | After 3 failures: 5s, doubles per failure, cap 60s | â€” |
 
 ---
 
-## IP Reputation & Threat Intelligence (SRS §3.3)
+## IP Reputation & Threat Intelligence (SRS Â§3.3)
 
 Feeds checked on every authentication request (cached locally, updated every 6 hours):
 
-- **AbuseIPDB** — reported abuse history
-- **Spamhaus** — SBL/XBL/PBL blocklists
-- **Emerging Threats** — active threat IPs
-- **Tor Exit Node List** — updated daily
-- **Internal reputation cache** — SAIPS-generated blocks
+- **AbuseIPDB** â€” reported abuse history
+- **Spamhaus** â€” SBL/XBL/PBL blocklists
+- **Emerging Threats** â€” active threat IPs
+- **Tor Exit Node List** â€” updated daily
+- **Internal reputation cache** â€” SAIPS-generated blocks
 
 **Tor policy:**
 - Standard accounts: Enhanced MFA required
@@ -108,7 +110,7 @@ Feeds checked on every authentication request (cached locally, updated every 6 h
 
 ---
 
-## Audit Log Integrity (SRS §4.2)
+## Audit Log Integrity (SRS Â§4.2)
 
 Each log entry stores:
 - `entry_hash`: SHA-256 of `prev_hash || event_code || user_id || timestamp || details`
@@ -121,13 +123,16 @@ php backend/scripts/verify-audit-chain.php --from="2025-03-01" --to="2025-03-21"
 
 A broken chain indicates tampering. Alert immediately if chain verification fails.
 
+Important operational note:
+- Email-domain migrations intentionally do not rewrite historical `audit_log` records, because mutating old entries would break hash-chain verification.
+
 **Access controls:**
 - `saips_app` DB user: INSERT only on `audit_log` (no UPDATE/DELETE)
 - Physical backup replica: read-only, offsite
 
 ---
 
-## Incident Response SLAs (SRS §5.1)
+## Incident Response SLAs (SRS Â§5.1)
 
 | Severity | Trigger | Required Response Time |
 |----------|---------|----------------------|
@@ -140,13 +145,13 @@ A broken chain indicates tampering. Alert immediately if chain verification fail
 
 ---
 
-## Admin Account Controls (SRS §6.1)
+## Admin Account Controls (SRS Â§6.1)
 
 - FIDO2/WebAuthn hardware key mandatory for all Admin/Superadmin accounts
 - Sessions expire after **15 minutes idle** and **8 hours absolute**
 - Only **1 concurrent session** permitted per admin account
 - New device/location login triggers immediate email + SMS notification
-- **No self-service password reset** — requires dual-authorisation from a second admin
+- **No self-service password reset** â€” requires dual-authorisation from a second admin
 - All admin actions logged to `ADM-001`, `ADM-002`, `ADM-003`
 
 ---
@@ -162,9 +167,19 @@ A broken chain indicates tampering. Alert immediately if chain verification fail
 | A05 | Security Misconfiguration | HSTS, CSP, X-Frame-Options, no directory listing, no error disclosure |
 | A06 | Vulnerable Components | Composer audit in CI/CD, monthly dependency review |
 | A07 | Auth & Session Failures | bcrypt, MFA, JWT rotation, brute-force detection, idle timeout |
-| A08 | Software & Data Integrity | CSRF tokens, SRI for CDN assets (none used — self-hosted) |
+| A08 | Software & Data Integrity | CSRF tokens, SRI for CDN assets (none used â€” self-hosted) |
 | A09 | Logging & Monitoring | SHA-256 chained audit log, real-time alerting, 90-day online retention |
 | A10 | Server-Side Request Forgery | No user-controlled URL fetching; allowlist for outbound requests |
+
+---
+
+## AI Reporting Guardrails
+
+- Executive-report generation is advisory only and requires human review
+- Only posture snapshot data needed for summary generation should be sent to the model
+- Structured output is preferred over free-form generation for predictable rendering
+- If `OPENAI_API_KEY` is absent, the app falls back to a deterministic local summary instead of failing open
+- Weekly executive-report emails are sent only to active `admin` and `superadmin` accounts
 
 ---
 
@@ -172,19 +187,19 @@ A broken chain indicates tampering. Alert immediately if chain verification fail
 
 | Standard | Status | Notes |
 |----------|--------|-------|
-| NIST SP 800-63B AAL2 | ✅ Implemented | MFA required for medium/high risk logins |
-| OWASP Top 10 2021 | ✅ Addressed | See table above |
-| ISO/IEC 27001 Access Control | ✅ Implemented | RBAC, audit trail, access reviews |
-| GDPR Article 32 | ✅ Implemented | Encryption, access control, pseudonymisation |
-| GDPR Article 33 | ✅ Procedure documented | 72h notification SLA in incident response |
-| SOC 2 Type II — CC6 | ✅ Implemented | Logical access, MFA, session management |
-| PCI DSS (where applicable) | ✅ Aligned | Password history, lockout policy |
+| NIST SP 800-63B AAL2 | âœ… Implemented | MFA required for medium/high risk logins |
+| OWASP Top 10 2021 | âœ… Addressed | See table above |
+| ISO/IEC 27001 Access Control | âœ… Implemented | RBAC, audit trail, access reviews |
+| GDPR Article 32 | âœ… Implemented | Encryption, access control, pseudonymisation |
+| GDPR Article 33 | âœ… Procedure documented | 72h notification SLA in incident response |
+| SOC 2 Type II â€” CC6 | âœ… Implemented | Logical access, MFA, session management |
+| PCI DSS (where applicable) | âœ… Aligned | Password history, lockout policy |
 
 ---
 
 ## Security Contact
 
-- **Security Officer:** sophia.johnson@acme.com
+- **Security Officer:** sophia.johnson@ownuh-saips.com
 - **Incident Hotline:** +XX-XXX-XXX-XXXX (24/7)
 - **Out-of-band channel:** Encrypted Signal group "SAIPS-SecOps"
 
@@ -192,7 +207,7 @@ A broken chain indicates tampering. Alert immediately if chain verification fail
 
 ## Responsible Disclosure
 
-To report a vulnerability, contact security@acme.com with:
+To report a vulnerability, contact security@ownuh-saips.com with:
 1. Description of the vulnerability
 2. Steps to reproduce
 3. Potential impact assessment
@@ -202,4 +217,4 @@ We aim to acknowledge reports within 24 hours and provide a fix timeline within 
 
 ---
 
-*Ownuh © 2025 — All Rights Reserved. CONFIDENTIAL.*
+*Ownuh Â© 2025 â€” All Rights Reserved. CONFIDENTIAL.*

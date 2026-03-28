@@ -1,0 +1,34 @@
+[data-bs-theme="dark"] .table-light,
+[data-bs-theme="dark"] .table-light > th,
+[data-bs-theme="dark"] .table-light > td,
+[data-bs-theme="dark"] .table > :not(caption) > * > .table-light,
+[data-bs-theme="dark"] table thead.table-light th,
+[data-bs-theme="dark"] .table thead.table-light th,
+[data-bs-theme="dark"] .table thead th {
+    background-color: #1f2937 !important;
+    color: #e5edf7 !important;
+    border-color: #334155 !important;
+}
+
+[data-bs-theme="dark"] .table-hover > tbody > tr:hover > * {
+    color: #f8fafc;
+}
+
+[data-bs-theme="dark"] .card-header,
+[data-bs-theme="dark"] .card-footer {
+    border-color: #334155;
+}
+
+.header-search-dropdown .dropdown-menu {
+    max-height: 26rem;
+    overflow-y: auto;
+}
+
+.header-search-dropdown .search-result-item {
+    border-radius: 0.5rem;
+}
+
+.header-search-dropdown .search-result-item:hover,
+.header-search-dropdown .search-result-item:focus {
+    background-color: rgba(var(--bs-primary-rgb), 0.08);
+}

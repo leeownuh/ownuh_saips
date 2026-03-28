@@ -16,6 +16,7 @@ header('Content-Type: application/json');
 
 use SAIPS\Middleware\AuditMiddleware;
 use SAIPS\Middleware\AuthMiddleware;
+use SAIPS\Services\AlertDispatcherService;
 
 $dbConfig  = require __DIR__ . '/../../config/database.php';
 $secConfig = require __DIR__ . '/../../config/security.php';
@@ -92,6 +93,12 @@ if ($method === 'POST') {
     $redis->del("saips:iprep:{$ip}");
 
     AuditMiddleware::ipBlocked($ip, $reason, $duration);
+    (new AlertDispatcherService())->dispatch('IPS-001', [
+        'event_code' => 'IPS-001',
+        'summary' => $reason,
+        'ip_address' => $ip,
+        'match_count' => 1,
+    ]);
 
     http_response_code(201);
     echo json_encode(['status' => 'success', 'message' => "IP {$ip} blocked."]);

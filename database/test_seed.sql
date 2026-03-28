@@ -1,5 +1,5 @@
 -- ============================================================
--- Ownuh SAIPS — Test Seed Data
+-- Ownuh SAIPS â€” Test Seed Data
 -- Password for all users: Admin@SAIPS2025!
 -- ============================================================
 
@@ -21,12 +21,12 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 -- Default users (password: Admin@SAIPS2025!)
 INSERT IGNORE INTO users (id, display_name, email, role, status, mfa_enrolled, mfa_factor, email_verified, email_verified_at) VALUES
-('usr-001-0000-0000-0000-000000000001', 'Sophia Johnson',  'sophia.johnson@acme.com',  'superadmin', 'active',  1, 'fido2',     1, NOW()),
-('usr-002-0000-0000-0000-000000000002', 'Marcus Chen',     'marcus.chen@acme.com',     'admin',      'active',  1, 'totp',      1, NOW()),
-('usr-003-0000-0000-0000-000000000003', 'Priya Patel',     'priya.patel@acme.com',     'manager',    'active',  1, 'totp',      1, NOW()),
-('usr-004-0000-0000-0000-000000000004', 'James Harris',    'james.harris@acme.com',    'user',       'active',  1, 'email_otp', 1, NOW()),
-('usr-005-0000-0000-0000-000000000005', 'Alex Rivera',     'alex.rivera@acme.com',     'user',       'pending', 0, 'none',      0, NULL),
-('usr-006-0000-0000-0000-000000000006', 'Test User',       'test@test.com',            'user',       'active',  0, 'none',      1, NOW());
+('usr-001-0000-0000-0000-000000000001', 'Sophia Johnson',  'sophia.johnson@ownuh-saips.com',  'superadmin', 'active',  1, 'fido2',     1, NOW()),
+('usr-002-0000-0000-0000-000000000002', 'Marcus Chen',     'marcus.chen@ownuh-saips.com',     'admin',      'active',  1, 'totp',      1, NOW()),
+('usr-003-0000-0000-0000-000000000003', 'Priya Patel',     'priya.patel@ownuh-saips.com',     'manager',    'active',  1, 'totp',      1, NOW()),
+('usr-004-0000-0000-0000-000000000004', 'James Harris',    'james.harris@ownuh-saips.com',    'user',       'active',  1, 'email_otp', 1, NOW()),
+('usr-005-0000-0000-0000-000000000005', 'Alex Rivera',     'alex.rivera@ownuh-saips.com',     'user',       'pending', 0, 'none',      0, NULL),
+('usr-006-0000-0000-0000-000000000006', 'Test User',       'test@ownuh-saips.com',            'user',       'active',  0, 'none',      1, NOW());
 
 -- Sample geo deny rules
 INSERT IGNORE INTO geo_rules (country_code, country_name, rule_type, created_by) VALUES

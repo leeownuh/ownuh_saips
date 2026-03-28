@@ -42,7 +42,7 @@ function nav_active(string $href, string $current): string {
                     <ul class="slide-menu child1">
                         <li class="slide"><a href="login.php" class="side-menu__item" role="menuitem">Sign In</a></li>
                         <li class="slide"><a href="otp-verify.php" class="side-menu__item" role="menuitem">MFA Verify</a></li>
-                        <li class="slide"><a href="auth-lockscreen.html" class="side-menu__item" role="menuitem">Session Lock</a></li>
+                        <li class="slide"><a href="auth-lockscreen.php" class="side-menu__item" role="menuitem">Session Lock</a></li>
                         <li class="slide"><a href="forgot-password.php" class="side-menu__item" role="menuitem">Reset Password</a></li>
                         <li class="slide"><a href="auth-create-password.php" class="side-menu__item" role="menuitem">Create Password</a></li>
                     </ul>
@@ -155,10 +155,10 @@ function nav_active(string $href, string $current): string {
                         <i class="ri-arrow-down-s-line side-menu__angle"></i>
                     </a>
                     <ul class="slide-menu child1">
-                        <li class="slide"><a href="auth-401.html" class="side-menu__item" role="menuitem">401 Unauthorized</a></li>
-                        <li class="slide"><a href="auth-404.html" class="side-menu__item" role="menuitem">404 Not Found</a></li>
-                        <li class="slide"><a href="auth-500.html" class="side-menu__item" role="menuitem">500 Server Error</a></li>
-                        <li class="slide"><a href="under-maintenance.html" class="side-menu__item" role="menuitem">Maintenance</a></li>
+                        <li class="slide"><a href="auth-401.php" class="side-menu__item" role="menuitem">401 Unauthorized</a></li>
+                        <li class="slide"><a href="auth-404.php" class="side-menu__item" role="menuitem">404 Not Found</a></li>
+                        <li class="slide"><a href="auth-500.php" class="side-menu__item" role="menuitem">500 Server Error</a></li>
+                        <li class="slide"><a href="under-maintenance.php" class="side-menu__item" role="menuitem">Maintenance</a></li>
                     </ul>
                 </li>
 

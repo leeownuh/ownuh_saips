@@ -1,0 +1,29 @@
+<svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="420" rx="28" fill="#091523"/>
+  <text x="56" y="64" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="700">How the product flows</text>
+  <text x="56" y="98" fill="#AFC3D6" font-family="Segoe UI, Arial, sans-serif" font-size="18">Security telemetry feeds operator action, leadership reporting, and real notification paths.</text>
+  <rect x="56" y="148" width="208" height="186" rx="24" fill="#10233A" stroke="#21415F"/>
+  <text x="84" y="192" fill="#8EDAD1" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">INPUTS</text>
+  <text x="84" y="234" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">Auth + IPS</text>
+  <text x="84" y="266" fill="#B9CBDB" font-family="Segoe UI, Arial, sans-serif" font-size="18">MFA</text>
+  <text x="84" y="292" fill="#B9CBDB" font-family="Segoe UI, Arial, sans-serif" font-size="18">Login attempts</text>
+  <text x="84" y="318" fill="#B9CBDB" font-family="Segoe UI, Arial, sans-serif" font-size="18">Blocked IPs</text>
+  <path d="M285 240H406" stroke="#7ED0E6" stroke-width="6" stroke-linecap="round"/>
+  <path d="M391 226L417 240L391 254" stroke="#7ED0E6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="420" y="148" width="320" height="186" rx="24" fill="#10233A" stroke="#21415F"/>
+  <text x="448" y="192" fill="#D9A441" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">CORE ENGINE</text>
+  <text x="448" y="234" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">Audit + incidents + posture</text>
+  <text x="448" y="266" fill="#B9CBDB" font-family="Segoe UI, Arial, sans-serif" font-size="18">Tamper-evident logs</text>
+  <text x="448" y="292" fill="#B9CBDB" font-family="Segoe UI, Arial, sans-serif" font-size="18">Incident lifecycle</text>
+  <text x="448" y="318" fill="#B9CBDB" font-family="Segoe UI, Arial, sans-serif" font-size="18">Compliance metrics</text>
+  <path d="M760 192H884" stroke="#A9C86B" stroke-width="6" stroke-linecap="round"/>
+  <path d="M869 178L895 192L869 206" stroke="#A9C86B" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M760 290H884" stroke="#D9A441" stroke-width="6" stroke-linecap="round"/>
+  <path d="M869 276L895 290L869 304" stroke="#D9A441" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="896" y="138" width="248" height="92" rx="24" fill="#112B23" stroke="#2E6E5F"/>
+  <text x="924" y="175" fill="#8EDAD1" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">LEADERSHIP OUTPUT</text>
+  <text x="924" y="208" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">AI reports + export</text>
+  <rect x="896" y="250" width="248" height="92" rx="24" fill="#2A2110" stroke="#8A6A1D"/>
+  <text x="924" y="287" fill="#D9A441" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">SECURITY OUTPUT</text>
+  <text x="924" y="320" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">Alert-rule email dispatch</text>
+</svg>

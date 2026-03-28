@@ -63,7 +63,7 @@ $csrf = csrf_token();
                                     <div class="text-center text-white my-4 p-4">
                                         <i class="ri-key-2-line fs-1 mb-3 d-block opacity-75"></i>
                                         <h3 class="text-white">New Password Requirements</h3>
-                                        <p class="mt-3">12–128 characters, strong complexity, and no reuse of recent passwords.</p>
+                                        <p class="mt-3">12â€“128 characters, strong complexity, and no reuse of recent passwords.</p>
                                     </div>
                                 </div>
                             </div>
@@ -94,14 +94,14 @@ $csrf = csrf_token();
                             </label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent"><i class="ri-mail-line text-muted"></i></span>
-                                <input type="email" class="form-control" id="login-email" placeholder="you@organisation.com" autocomplete="email" required>
+                                <input type="email" class="form-control" id="login-email" placeholder="you@ownuh-saips.com" autocomplete="email" required>
                             </div>
                         </div>
 
                         <div class="alert alert-info d-flex align-items-start gap-2 py-2 px-3 fs-12 mb-4">
                             <i class="ri-information-line flex-shrink-0 mt-1"></i>
                             <div>
-                                <strong>Password Policy:</strong> Min 12 chars · 3-of-4 character classes · Cannot resemble username/email · Recent passwords blocked.
+                                <strong>Password Policy:</strong> Min 12 chars Â· 3-of-4 character classes Â· Cannot resemble username/email Â· Recent passwords blocked.
                             </div>
                         </div>
 

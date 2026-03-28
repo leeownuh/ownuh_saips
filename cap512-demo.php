@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 /**
- * Ownuh SAIPS — CAP512 Syllabus Demonstration
+ * Ownuh SAIPS â€” CAP512 Syllabus Demonstration
  * CAP512: Open Source Web Application Development
- * Covers ALL units: I–VII + Graphics
+ * Covers ALL units: Iâ€“VII + Graphics
  * L:2 T:0 P:4 Credits:4 | LPU Session 2025-26
  */
 
@@ -11,18 +11,18 @@ require_once __DIR__ . '/backend/bootstrap.php';
 $user = require_auth('admin');
 $db   = Database::getInstance();
 
-// ════════════════════════════════════════════════════════════════
-// UNIT I — Introduction to PHP / Language Basics
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// UNIT I â€” Introduction to PHP / Language Basics
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// Data types — integers, floats, strings, booleans, null
+// Data types â€” integers, floats, strings, booleans, null
 $intVar    = 42;
 $floatVar  = 3.14159;
 $strVar    = "Ownuh SAIPS v1.0";
 $boolVar   = true;
 $nullVar   = null;
 
-// Variable variables — CAP512 Unit I
+// Variable variables â€” CAP512 Unit I
 $varName   = 'greeting';
 $$varName  = 'Hello from SAIPS!';
 
@@ -42,11 +42,11 @@ $asBool = (bool)$numStr;     // true
 define('SAIPS_VERSION', '1.0.0');
 define('MAX_LOGIN_ATTEMPTS', 10);
 
-// ════════════════════════════════════════════════════════════════
-// UNIT II — Control Flow and Loops
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// UNIT II â€” Control Flow and Loops
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// if / elseif / else — security score classification
+// if / elseif / else â€” security score classification
 $score = 87;
 if ($score >= 90) {
     $scoreClass = 'Excellent';
@@ -58,7 +58,7 @@ if ($score >= 90) {
     $scoreClass = 'Poor';
 }
 
-// switch — event code routing
+// switch â€” event code routing
 $eventCode = 'AUTH-001';
 switch (substr($eventCode, 0, 3)) {
     case 'AUT': $eventType = 'Authentication';    break;
@@ -75,13 +75,13 @@ $riskLevel = match(true) {
     default      => 'High Risk',
 };
 
-// for loop — generate dummy last 5 login timestamps
+// for loop â€” generate dummy last 5 login timestamps
 $loginTimes = [];
 for ($i = 0; $i < 5; $i++) {
     $loginTimes[] = date('Y-m-d H:i:s', time() - ($i * 3600));
 }
 
-// while loop — countdown for session expiry
+// while loop â€” countdown for session expiry
 $secondsLeft = 850;
 $expiry = '';
 while ($secondsLeft > 0) {
@@ -100,9 +100,9 @@ foreach ($authMethods as $code => $desc) {
     $methodList[] = "{$code}: {$desc}";
 }
 
-// ════════════════════════════════════════════════════════════════
-// UNIT III — Functions
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// UNIT III â€” Functions
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 // User-defined function with default parameter
 function calculate_risk_score(int $failures, bool $isTor = false, bool $newLocation = false): int {
@@ -119,12 +119,12 @@ function format_duration(int $seconds): string {
     return intdiv($seconds, 3600) . 'h ' . intdiv($seconds % 3600, 60) . 'm';
 }
 
-// Variadic function — CAP512 Unit III
+// Variadic function â€” CAP512 Unit III
 function build_security_report(string $title, string ...$items): string {
     return "<h6>{$title}</h6><ul>" . implode('', array_map(fn($i) => "<li>{$i}</li>", $items)) . "</ul>";
 }
 
-// Anonymous function / closure — CAP512 Unit III
+// Anonymous function / closure â€” CAP512 Unit III
 $getSeverityLabel = function(string $sev): string {
     return match($sev) {
         'sev1' => 'SEV-1 Critical', 'sev2' => 'SEV-2 High',
@@ -143,14 +143,14 @@ $result = $action('185.220.101.47');
 $scores = [45, 72, 89, 91, 38];
 $high   = array_filter($scores, fn($s) => $s >= 80);
 
-// Recursive function — CAP512 Unit III
+// Recursive function â€” CAP512 Unit III
 function factorial(int $n): int {
     return $n <= 1 ? 1 : $n * factorial($n - 1);
 }
 
-// ════════════════════════════════════════════════════════════════
-// UNIT IV — Strings
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// UNIT IV â€” Strings
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 // String constants and quoting
 $single  = 'Single quoted: $intVar is not interpolated';
@@ -182,22 +182,22 @@ $sha256hash  = hash('sha256', 'saips_secret_' . time());
 $base64enc   = base64_encode('user:secret');
 $base64dec   = base64_decode($base64enc);
 
-// Regex — validate IP, email, extract event code — CAP512 Unit IV
+// Regex â€” validate IP, email, extract event code â€” CAP512 Unit IV
 preg_match('/^(\d{1,3}\.){3}\d{1,3}$/', $trimmed, $ipMatch);
 preg_match('/^(AUTH|IPS|SES|ADM)-\d{3}$/', 'AUTH-001', $codeMatch);
-$emailValid = preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', 'test@acme.com');
+$emailValid = preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', 'test@ownuh-saips.com');
 $redacted   = preg_replace('/\d/', '*', '185.220.101.47');  // ***.***.***.** 
 
 // String searching
-$eventLog   = "2025-03-21 14:23:07 AUTH-001 sophia.johnson@acme.com 203.0.113.10 AU";
+$eventLog   = "2025-03-21 14:23:07 AUTH-001 sophia.johnson@ownuh-saips.com 203.0.113.10 AU";
 $parts      = explode(' ', $eventLog, 6);
 $logDate    = $parts[0] . ' ' . $parts[1];
 $logCode    = $parts[2];
 $logUser    = $parts[3];
 
-// ════════════════════════════════════════════════════════════════
-// UNIT V — Arrays
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// UNIT V â€” Arrays
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 // Indexed array
 $eventCodes = ['AUTH-001','AUTH-002','AUTH-003','IPS-001','IPS-002','SES-001','ADM-001'];
@@ -205,7 +205,7 @@ $eventCodes = ['AUTH-001','AUTH-002','AUTH-003','IPS-001','IPS-002','SES-001','A
 // Associative array
 $userRecord = [
     'id'           => 'usr-001',
-    'email'        => 'sophia.johnson@acme.com',
+    'email'        => 'sophia.johnson@ownuh-saips.com',
     'role'         => 'superadmin',
     'mfa_enrolled' => true,
     'failed_attempts' => 0,
@@ -218,7 +218,7 @@ $loginAttempts = [
     ['ip' => '198.54.117.212', 'failures' => 7,  'blocked' => false],
 ];
 
-// Array functions — CAP512 Unit V
+// Array functions â€” CAP512 Unit V
 $count      = count($eventCodes);                           // 7
 $pushed     = $eventCodes;
 array_push($pushed, 'ADM-002', 'ADM-003');
@@ -243,7 +243,7 @@ $keySearch  = array_search('IPS-001', $eventCodes);        // 3
 $keysOf     = array_keys($userRecord);
 $valuesOf   = array_values($userRecord);
 
-// Sorting — CAP512 Unit V
+// Sorting â€” CAP512 Unit V
 $nums       = [38, 91, 45, 72, 89];
 sort($nums);                                               // ascending
 $sorted     = $nums;
@@ -252,19 +252,19 @@ $assocSort  = ['c'=>3,'a'=>1,'b'=>2];
 asort($assocSort);                                         // sort by value, keep keys
 ksort($assocSort);                                         // sort by key
 
-// usort — custom comparator
+// usort â€” custom comparator
 $users2 = [['name'=>'Priya','score'=>45],['name'=>'Sophia','score'=>91],['name'=>'Marcus','score'=>72]];
 usort($users2, fn($a,$b) => $b['score'] - $a['score']);   // sort by score descending
 
-// Converting between arrays and variables — CAP512 Unit V
+// Converting between arrays and variables â€” CAP512 Unit V
 $config  = ['host'=>'127.0.0.1','port'=>3306,'name'=>'ownuh_saips'];
 extract($config);  // creates $host, $port, $name
 $compact = compact('host', 'port', 'name');  // back to array
 list($first, $second) = $eventCodes;        // destructuring
 
-// ════════════════════════════════════════════════════════════════
-// UNIT VI — Objects and Classes
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// UNIT VI â€” Objects and Classes
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 // Base class
 class SecurityEntity {
@@ -283,7 +283,7 @@ class SecurityEntity {
     public function __destruct() { /* cleanup if needed */ }
 }
 
-// Inheritance — CAP512 Unit VI
+// Inheritance â€” CAP512 Unit VI
 class User extends SecurityEntity {
     private string $id;
     public string  $displayName;
@@ -315,7 +315,7 @@ class User extends SecurityEntity {
 
     // Method overriding
     public function __toString(): string {
-        return "{$this->displayName} ({$this->role}) — {$this->email}";
+        return "{$this->displayName} ({$this->role}) â€” {$this->email}";
     }
 }
 
@@ -368,9 +368,9 @@ class LoginEvent extends SecurityEntity implements Auditable {
     }
 }
 
-// Instantiate objects — CAP512 Unit VI
-$adminUser  = new AdminUser('usr-001', 'Sophia Johnson', 'sophia.johnson@acme.com');
-$normalUser = new User('usr-004', 'James Harris', 'james.harris@acme.com', 'user');
+// Instantiate objects â€” CAP512 Unit VI
+$adminUser  = new AdminUser('usr-001', 'Sophia Johnson', 'sophia.johnson@ownuh-saips.com');
+$normalUser = new User('usr-004', 'James Harris', 'james.harris@ownuh-saips.com', 'user');
 $loginEvent = new LoginEvent('usr-001', '203.0.113.10', 'AU', true, 15);
 
 $adminStr    = (string)$adminUser;        // __toString
@@ -379,11 +379,11 @@ $eventCode   = $loginEvent->getAuditEvent();
 $eventDetail = $loginEvent->getDetails();
 $objCount    = User::getInstanceCount();  // static method
 
-// ════════════════════════════════════════════════════════════════
-// UNIT VII — Database (live mysqli)
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// UNIT VII â€” Database (live mysqli)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// Fetch live data from MySQL — CAP512 Unit VII
+// Fetch live data from MySQL â€” CAP512 Unit VII
 $liveUsers    = $db->fetchAll('SELECT id, display_name, email, role, status, mfa_enrolled FROM users WHERE deleted_at IS NULL ORDER BY role LIMIT 10');
 $liveAudit    = $db->fetchAll('SELECT event_code, event_name, source_ip, created_at FROM audit_log ORDER BY id DESC LIMIT 5');
 $liveBlocked  = $db->fetchAll('SELECT ip_address, block_type, blocked_at FROM blocked_ips WHERE unblocked_at IS NULL LIMIT 5');
@@ -403,11 +403,11 @@ $statsAgg = $db->fetchOne(
      FROM users WHERE deleted_at IS NULL'
 );
 
-// ════════════════════════════════════════════════════════════════
-// UNIT VII — Graphics (GD Library)
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// UNIT VII â€” Graphics (GD Library)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// 1. Creating and drawing an image — CAP512 Unit VII
+// 1. Creating and drawing an image â€” CAP512 Unit VII
 $chartW = 400; $chartH = 150;
 $barImg = imagecreatetruecolor($chartW, $chartH);
 $white  = imagecolorallocate($barImg, 255, 255, 255);
@@ -420,19 +420,19 @@ $black  = imagecolorallocate($barImg, 30, 30, 30);
 imagefill($barImg, 0, 0, $white);
 imagefilledrectangle($barImg, 0, $chartH-1, $chartW, $chartH-1, $gray);
 
-// CAP512: Drawing images — bar chart of last 5 event types from DB
+// CAP512: Drawing images â€” bar chart of last 5 event types from DB
 $barData  = ['AUTH-001'=>24, 'AUTH-002'=>5, 'IPS-001'=>3, 'SES-001'=>12, 'ADM-002'=>2];
 $barColors= [$blue, $red, $red, $blue, $yellow];
 $barW     = 50; $gap = 20; $x = 20;
 $maxVal   = max($barData);
 
 foreach ($barData as $i => [$label, $val]) {
-    // Scale heights — CAP512: scaling images
+    // Scale heights â€” CAP512: scaling images
     $barH = $maxVal > 0 ? (int)(($val / $maxVal) * 110) : 0;
     $y1   = $chartH - 20 - $barH;
     $y2   = $chartH - 20;
     imagefilledrectangle($barImg, $x, $y1, $x + $barW - 2, $y2, $barColors[$i]);
-    // Images with text — CAP512 Unit VII
+    // Images with text â€” CAP512 Unit VII
     imagestring($barImg, 1, $x + 2, $chartH - 15, substr($label, 0, 8), $black);
     imagestring($barImg, 2, $x + 15, $y1 - 12, (string)$val, $black);
     $x += $barW + $gap;
@@ -447,7 +447,7 @@ $barChartData = ob_get_clean();
 $barChartUri  = 'data:image/png;base64,' . base64_encode($barChartData);
 imagedestroy($barImg);
 
-// 2. Pie chart — CAP512 Unit VII: color handling
+// 2. Pie chart â€” CAP512 Unit VII: color handling
 $pieW = 200; $pieH = 200;
 $pieImg  = imagecreatetruecolor($pieW, $pieH);
 $pieBg   = imagecolorallocatealpha($pieImg, 255, 255, 255, 127);
@@ -477,7 +477,7 @@ imagepng($pieImg);
 $pieUri = 'data:image/png;base64,' . base64_encode(ob_get_clean());
 imagedestroy($pieImg);
 
-// 3. User avatar grid — CAP512 Unit VII: loop + GD
+// 3. User avatar grid â€” CAP512 Unit VII: loop + GD
 $avatarGrid = [];
 foreach (array_slice($liveUsers, 0, 4) as $u) {
     $avatarGrid[] = generate_avatar_image($u['display_name'] ?? $u['email'], 48);
@@ -512,16 +512,16 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
         <div class="app-container">
             <div class="hstack flex-wrap gap-3 mb-5">
                 <div class="flex-grow-1">
-                    <h4 class="mb-1 fw-semibold"><i class="ri-code-box-line me-2 text-primary"></i>CAP512 — PHP Syllabus Coverage Demo</h4>
+                    <h4 class="mb-1 fw-semibold"><i class="ri-code-box-line me-2 text-primary"></i>CAP512 â€” PHP Syllabus Coverage Demo</h4>
                     <nav><ol class="breadcrumb breadcrumb-arrow mb-0">
                         <li class="breadcrumb-item"><a href="dashboard.php">Security Dashboard</a></li>
                         <li class="breadcrumb-item active">CAP512 Demo</li>
                     </ol></nav>
                 </div>
-                <span class="badge bg-primary px-3 py-2">LPU · CAP512 · 2025-26</span>
+                <span class="badge bg-primary px-3 py-2">LPU Â· CAP512 Â· 2025-26</span>
             </div>
 
-            <!-- Unit cards loop — CAP512 Unit V: arrays -->
+            <!-- Unit cards loop â€” CAP512 Unit V: arrays -->
             <?php
             $units = [
                 ['U', 'I',   'Language Basics',          'Variables, data types, constants, type juggling, heredoc, embedding PHP'],
@@ -570,13 +570,13 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                     <div class="row g-3">
                         <div class="col-md-4">
                             <div class="alert alert-<?= $score >= 75 ? 'success' : 'warning' ?> py-2">
-                                Score <?= $score ?> → <strong><?= esc($scoreClass) ?></strong> (if/elseif/else)
+                                Score <?= $score ?> â†’ <strong><?= esc($scoreClass) ?></strong> (if/elseif/else)
                             </div>
-                            <div class="alert alert-info py-2">Event "<?= esc($eventCode) ?>" → <strong><?= esc($eventType) ?></strong> (switch)</div>
+                            <div class="alert alert-info py-2">Event "<?= esc($eventCode) ?>" â†’ <strong><?= esc($eventType) ?></strong> (switch)</div>
                             <div class="alert alert-primary py-2">Risk: <strong><?= esc($riskLevel) ?></strong> (match)</div>
                         </div>
                         <div class="col-md-4">
-                            <h6 class="text-muted fs-12 mb-2">for loop — Last 5 logins</h6>
+                            <h6 class="text-muted fs-12 mb-2">for loop â€” Last 5 logins</h6>
                             <ul class="list-unstyled fs-12 mb-0">
                                 <?php foreach ($loginTimes as $t): ?>
                                 <li><i class="ri-time-line me-1 text-muted"></i><?= esc($t) ?></li>
@@ -584,7 +584,7 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                             </ul>
                         </div>
                         <div class="col-md-4">
-                            <h6 class="text-muted fs-12 mb-2">foreach — MFA methods</h6>
+                            <h6 class="text-muted fs-12 mb-2">foreach â€” MFA methods</h6>
                             <ul class="list-unstyled fs-12 mb-0">
                                 <?php foreach ($authMethods as $code => $desc): ?>
                                 <li><strong><?= esc($code) ?>:</strong> <?= esc($desc) ?></li>
@@ -613,14 +613,14 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                         <div class="col-md-4">
                             <h6 class="text-muted fs-12 mb-2">Variadic + Closures</h6>
                             <div class="bg-light rounded p-2 fs-12">
-                                <?= build_security_report('Checks', 'bcrypt ✓', 'TOTP ✓', 'TLS 1.3 ✓') ?>
+                                <?= build_security_report('Checks', 'bcrypt âœ“', 'TOTP âœ“', 'TLS 1.3 âœ“') ?>
                             </div>
                             <p class="fs-12 mt-2 mb-1">Closure: <?= esc($getSeverityLabel('sev2')) ?></p>
                             <p class="fs-12 mb-1">Variable fn: <?= esc($result) ?></p>
                         </div>
                         <div class="col-md-4">
                             <h6 class="text-muted fs-12 mb-2">Arrow function + array_filter</h6>
-                            <p class="fs-12">Scores ≥80: <strong><?= implode(', ', $high) ?></strong></p>
+                            <p class="fs-12">Scores â‰¥80: <strong><?= implode(', ', $high) ?></strong></p>
                             <p class="fs-12">sprintf: <strong><?= esc($formatted) ?></strong></p>
                         </div>
                     </div>
@@ -642,9 +642,9 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                                 <tr><td>str_repeat('*',6)</td><td><?= esc($repeated) ?></td></tr>
                                 <tr><td>htmlspecialchars()</td><td><?= esc($htmlenc) ?></td></tr>
                                 <tr><td>base64_encode()</td><td><?= esc($base64enc) ?></td></tr>
-                                <tr><td>hash('sha256',...)</td><td><?= esc(substr($sha256hash,0,16)) ?>…</td></tr>
+                                <tr><td>hash('sha256',...)</td><td><?= esc(substr($sha256hash,0,16)) ?>â€¦</td></tr>
                                 <tr><td>str_contains()</td><td><?= $contains ? 'true' : 'false' ?></td></tr>
-                                <tr><td>preg_replace(digits→*)</td><td><?= esc($redacted) ?></td></tr>
+                                <tr><td>preg_replace(digitsâ†’*)</td><td><?= esc($redacted) ?></td></tr>
                             </table>
                         </div>
                         <div class="col-md-6">
@@ -656,7 +656,7 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                             <p class="fs-12 mb-1">strrev: <?= esc($reversed) ?></p>
                             <h6 class="text-muted fs-12 mt-3 mb-2">Log Line Parsing</h6>
                             <code class="fs-11"><?= esc($eventLog) ?></code>
-                            <p class="fs-12 mt-2 mb-1">Date: <?= esc($logDate) ?> · Code: <?= esc($logCode) ?> · User: <?= esc($logUser) ?></p>
+                            <p class="fs-12 mt-2 mb-1">Date: <?= esc($logDate) ?> Â· Code: <?= esc($logCode) ?> Â· User: <?= esc($logUser) ?></p>
                         </div>
                     </div>
                 </div>
@@ -681,7 +681,7 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                             <p class="fs-12 mb-1">array_reduce (total failures): <strong><?= $reduced ?></strong></p>
                             <p class="fs-12 mb-1">array_column (IPs): <?= esc(implode(', ', $ipColumn)) ?></p>
                             <p class="fs-12 mb-1">array_flip: <?= esc(implode(',', array_keys($flipped))) ?></p>
-                            <p class="fs-12 mb-1">extract → $host: <?= esc($host ?? '') ?>, $port: <?= esc((string)($port ?? '')) ?></p>
+                            <p class="fs-12 mb-1">extract â†’ $host: <?= esc($host ?? '') ?>, $port: <?= esc((string)($port ?? '')) ?></p>
                             <p class="fs-12 mb-1">compact: <?= esc($compact['name'] ?? '') ?></p>
                         </div>
                         <div class="col-md-4">
@@ -694,7 +694,7 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                             <?php endforeach; ?>
                             <h6 class="text-muted fs-12 mt-2 mb-2">Multi-dimensional</h6>
                             <?php foreach ($loginAttempts as $a): ?>
-                            <p class="fs-12 mb-1"><?= esc($a['ip']) ?> — <?= $a['failures'] ?> fails — <?= $a['blocked'] ? '🔴 blocked' : '🟢 ok' ?></p>
+                            <p class="fs-12 mb-1"><?= esc($a['ip']) ?> â€” <?= $a['failures'] ?> fails â€” <?= $a['blocked'] ? 'ðŸ”´ blocked' : 'ðŸŸ¢ ok' ?></p>
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -711,7 +711,7 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                                 <tr><td>$adminUser->getRole()</td><td><?= esc($adminRole) ?></td></tr>
                                 <tr><td>$normalUser->__toString()</td><td><?= esc((string)$normalUser) ?></td></tr>
                                 <tr><td>$loginEvent->getAuditEvent()</td><td><?= esc($eventCode) ?></td></tr>
-                                <tr><td>Implements Auditable</td><td>✓ getDetails() returns array</td></tr>
+                                <tr><td>Implements Auditable</td><td>âœ“ getDetails() returns array</td></tr>
                                 <tr><td>User::getInstanceCount()</td><td><?= $objCount ?> (static)</td></tr>
                                 <tr><td>$loginEvent->getCreatedAt()</td><td><?= esc($loginEvent->getCreatedAt()) ?></td></tr>
                             </table>
@@ -725,7 +725,7 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                         <div class="col-md-6">
                             <h6 class="text-muted fs-12 mb-2">Database class (Singleton OOP)</h6>
                             <p class="fs-12">Queries this request: <strong><?= $db->getQueryCount() ?></strong></p>
-                            <p class="fs-12">Database::getInstance() — Singleton pattern</p>
+                            <p class="fs-12">Database::getInstance() â€” Singleton pattern</p>
                             <p class="fs-12">Methods: fetchAll(), fetchOne(), fetchScalar(), execute()</p>
                             <h6 class="text-muted fs-12 mt-3 mb-2">Exception Handling</h6>
                             <?php
@@ -756,7 +756,7 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                                         <td><?= esc($u['display_name']) ?></td>
                                         <td><?= role_badge($u['role']) ?></td>
                                         <td><?= status_badge($u['status']) ?></td>
-                                        <td><?= $u['mfa_enrolled'] ? '✓' : '✗' ?></td>
+                                        <td><?= $u['mfa_enrolled'] ? 'âœ“' : 'âœ—' ?></td>
                                     </tr>
                                     <?php endforeach; ?>
                                     <?php endif; ?>
@@ -775,14 +775,14 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
                                     <tr>
                                         <td><span class="badge <?= event_badge_class($a['event_code']) ?>"><?= esc($a['event_code']) ?></span></td>
                                         <td><?= esc($a['event_name']) ?></td>
-                                        <td class="fw-mono"><?= esc($a['source_ip'] ?? '—') ?></td>
+                                        <td class="fw-mono"><?= esc($a['source_ip'] ?? 'â€”') ?></td>
                                         <td class="text-muted"><?= esc(substr($a['created_at'] ?? '', 11, 8)) ?></td>
                                     </tr>
                                     <?php endforeach; ?>
                                     <?php endif; ?>
                                 </table>
                             </div>
-                            <p class="fs-11 text-muted mt-2">Total: <?= esc((string)$statsAgg['total']) ?> users · <?= esc((string)$statsAgg['mfa']) ?> MFA · <?= esc((string)$statsAgg['locked']) ?> locked</p>
+                            <p class="fs-11 text-muted mt-2">Total: <?= esc((string)$statsAgg['total']) ?> users Â· <?= esc((string)$statsAgg['mfa']) ?> MFA Â· <?= esc((string)$statsAgg['locked']) ?> locked</p>
                         </div>
                     </div>
                 </div>
@@ -826,9 +826,9 @@ $gaugeUri = generate_score_gauge(87, 220, 110);
             <div class="alert alert-success d-flex gap-3 mt-4">
                 <i class="ri-checkbox-circle-line fs-3 flex-shrink-0"></i>
                 <div>
-                    <strong>CAP512 Coverage Complete</strong> — All 7 units demonstrated in a single live PHP file.
-                    DB queries this page: <strong><?= $db->getQueryCount() ?></strong> ·
-                    PHP Version: <strong><?= PHP_VERSION ?></strong> ·
+                    <strong>CAP512 Coverage Complete</strong> â€” All 7 units demonstrated in a single live PHP file.
+                    DB queries this page: <strong><?= $db->getQueryCount() ?></strong> Â·
+                    PHP Version: <strong><?= PHP_VERSION ?></strong> Â·
                     GD enabled: <strong><?= function_exists('imagecreatetruecolor') ? 'Yes' : 'No' ?></strong>
                 </div>
             </div>

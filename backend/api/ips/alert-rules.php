@@ -32,9 +32,13 @@ if (!file_exists($bootstrapPath)) {
 require_once $bootstrapPath;
 
 // ── Determine auth mode: JWT API vs PHP session ───────────────────────────────
-$isApiCall = str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')
-          || str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')
-          || str_starts_with($_SERVER['HTTP_AUTHORIZATION'] ?? '', 'Bearer ');
+$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+$contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+$acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+$hasSessionCookie = !empty($_COOKIE[session_name() ?: 'PHPSESSID']);
+$isApiCall = str_starts_with($authHeader, 'Bearer ')
+          || (str_contains($contentType, 'application/json') && !$hasSessionCookie);
+$wantsJson = str_contains($acceptHeader, 'application/json') || $isApiCall;
 
 header('Content-Type: application/json');
 
@@ -132,7 +136,7 @@ if ($method === 'POST' && empty($body['_method'])) {
             exit;
         }
         $db->execute('UPDATE alert_rules SET is_active = NOT is_active WHERE id = ?', [$ruleId]);
-        _redirect_or_json(['status' => 'ok', 'message' => 'Alert rule toggled.'], $isApiCall);
+        _redirect_or_json(['status' => 'ok', 'message' => 'Alert rule toggled.'], $wantsJson);
         exit;
     }
 
@@ -144,7 +148,7 @@ if ($method === 'POST' && empty($body['_method'])) {
             exit;
         }
         $db->execute('DELETE FROM alert_rules WHERE id = ?', [$ruleId]);
-        _redirect_or_json(['status' => 'ok', 'message' => 'Alert rule deleted.'], $isApiCall);
+        _redirect_or_json(['status' => 'ok', 'message' => 'Alert rule deleted.'], $wantsJson);
         exit;
     }
 
@@ -187,13 +191,16 @@ if ($method === 'POST' && empty($body['_method'])) {
     }
 
     try {
-        $db->execute(
+        $affected = $db->execute(
             'INSERT INTO alert_rules
                 (id, rule_name, event_type, channel, threshold_count,
                  window_minutes, destination, is_active, created_by)
              VALUES (UUID(), ?, ?, ?, ?, ?, ?, 1, ?)',
             [$name, $eventType, $channel, $threshold, $window, $destination, $adminId]
         );
+        if ($affected < 1) {
+            throw new \RuntimeException('The alert rule was not saved.');
+        }
     } catch (\Exception $e) {
         error_log('[SAIPS Alert Rules] Insert failed: ' . $e->getMessage());
         http_response_code(500);
@@ -203,7 +210,7 @@ if ($method === 'POST' && empty($body['_method'])) {
 
     _redirect_or_json(
         ['status' => 'ok', 'message' => "Alert rule '{$name}' created successfully."],
-        $isApiCall,
+        $wantsJson,
         'dashboard.php?alert_ok=1'
     );
     exit;

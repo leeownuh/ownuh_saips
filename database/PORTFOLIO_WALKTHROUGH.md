@@ -6,7 +6,7 @@ This dataset is designed for recruiter demos and portfolio walkthroughs.
 
 Use this account for a reliable admin demo:
 
-- Email: `lucia.alvarez@acme.com`
+- Email: `lucia.alvarez@ownuh-saips.com`
 - Password: `Admin@SAIPS2025!`
 - Role: `admin`
 - MFA: `email_otp`
@@ -39,9 +39,9 @@ Show:
 
 Best records:
 
-- `priya.patel@acme.com` for locked-account handling
-- `alex.rivera@acme.com` for pending onboarding
-- `ava.thompson@acme.com` for suspended-user review
+- `priya.patel@ownuh-saips.com` for locked-account handling
+- `alex.rivera@ownuh-saips.com` for pending onboarding
+- `ava.thompson@ownuh-saips.com` for suspended-user review
 
 ### 3. MFA Operations
 
@@ -53,9 +53,9 @@ Show:
 
 Best records:
 
-- `sophia.johnson@acme.com` for superadmin with strong MFA posture
-- `marcus.chen@acme.com` and `nina.schultz@acme.com` for TOTP coverage
-- `lucia.alvarez@acme.com` and `rahul.mehta@acme.com` for Email OTP
+- `sophia.johnson@ownuh-saips.com` for superadmin with strong MFA posture
+- `marcus.chen@ownuh-saips.com` and `nina.schultz@ownuh-saips.com` for TOTP coverage
+- `lucia.alvarez@ownuh-saips.com` and `rahul.mehta@ownuh-saips.com` for Email OTP
 
 ### 4. IPS / Threat Controls
 

@@ -1,0 +1,45 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="640" rx="32" fill="#07111F"/>
+  <rect x="24" y="24" width="1232" height="592" rx="28" fill="url(#bg)"/>
+  <circle cx="1072" cy="132" r="132" fill="#1B6B5C" fill-opacity="0.28"/>
+  <circle cx="1162" cy="98" r="72" fill="#D9A441" fill-opacity="0.35"/>
+  <circle cx="109" cy="104" r="84" fill="#0E7A86" fill-opacity="0.3"/>
+  <rect x="82" y="96" width="118" height="118" rx="24" fill="#0B1C32" stroke="#8EDAD1" stroke-width="2"/>
+  <path d="M141 128L171 141V164C171 187 156 208 141 216C126 208 111 187 111 164V141L141 128Z" fill="#8EDAD1"/>
+  <path d="M130 171L138 179L153 159" stroke="#0B1C32" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="236" y="150" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="72" font-weight="700">Ownuh SAIPS</text>
+  <text x="238" y="198" fill="#9EB4C9" font-family="Segoe UI, Arial, sans-serif" font-size="26">Secure Authentication and Intrusion Prevention System</text>
+  <text x="82" y="292" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="44" font-weight="700">Security operations product thinking, not just pages.</text>
+  <text x="82" y="336" fill="#C9D6E3" font-family="Segoe UI, Arial, sans-serif" font-size="27">AI executive reporting. Live alert dispatch. Executive email delivery. Real auth and IPS workflows.</text>
+  <g opacity="0.96">
+    <rect x="82" y="402" width="268" height="136" rx="24" fill="#0D1B2D" stroke="#1B3354"/>
+    <text x="108" y="445" fill="#8EDAD1" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">AI EXECUTIVE REPORTING</text>
+    <text x="108" y="486" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="33" font-weight="700">Leadership-ready</text>
+    <text x="108" y="516" fill="#B6C8D8" font-family="Segoe UI, Arial, sans-serif" font-size="20">Posture summaries from live security data</text>
+  </g>
+  <g opacity="0.96">
+    <rect x="378" y="402" width="250" height="136" rx="24" fill="#0D1B2D" stroke="#1B3354"/>
+    <text x="404" y="445" fill="#D9A441" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">ALERT DELIVERY</text>
+    <text x="404" y="486" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="33" font-weight="700">Event-driven</text>
+    <text x="404" y="516" fill="#B6C8D8" font-family="Segoe UI, Arial, sans-serif" font-size="20">Lockouts, incidents, and IP blocks notify</text>
+  </g>
+  <g opacity="0.96">
+    <rect x="656" y="402" width="258" height="136" rx="24" fill="#0D1B2D" stroke="#1B3354"/>
+    <text x="682" y="445" fill="#7ED0E6" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">EXECUTIVE DELIVERY</text>
+    <text x="682" y="486" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="33" font-weight="700">HTML + PDF</text>
+    <text x="682" y="516" fill="#B6C8D8" font-family="Segoe UI, Arial, sans-serif" font-size="20">Scheduled weekly reports for admins</text>
+  </g>
+  <g opacity="0.96">
+    <rect x="942" y="402" width="254" height="136" rx="24" fill="#0D1B2D" stroke="#1B3354"/>
+    <text x="968" y="445" fill="#A9C86B" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">DEMO READY</text>
+    <text x="968" y="486" fill="#F4F7FB" font-family="Segoe UI, Arial, sans-serif" font-size="33" font-weight="700">XAMPP + ngrok</text>
+    <text x="968" y="516" fill="#B6C8D8" font-family="Segoe UI, Arial, sans-serif" font-size="20">Built to run locally and present publicly</text>
+  </g>
+  <defs>
+    <linearGradient id="bg" x1="70" y1="52" x2="1204" y2="592" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A1730"/>
+      <stop offset="0.54" stop-color="#0E1D2E"/>
+      <stop offset="1" stop-color="#132536"/>
+    </linearGradient>
+  </defs>
+</svg>

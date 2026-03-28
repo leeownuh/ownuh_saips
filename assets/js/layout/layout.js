@@ -1,1 +1,309 @@
-function updateLayout(){function e(e){let t=e;e===THEME_MODES.SYSTEM&&(t=window.matchMedia("(prefers-color-scheme: dark)").matches?THEME_MODES.DARK:THEME_MODES.LIGHT),document.documentElement.setAttribute(ATTRIBUTES.THEME,t),sessionStorage.setItem(ATTRIBUTES.THEME,e)}function t(e,t){document.querySelectorAll(`[data-attribute="${e}"]`).forEach((n=>{const s=n.nextElementSibling;s&&s.classList.contains("switcher-card")?s.classList.remove("active"):"data-font-body"===e||"data-font-heading"===e?n.value=t:n.closest(".list-group-item")?.classList.contains("form-check")&&n.closest(".list-group-item")?.classList.remove("active")}));const n=document.querySelector(`[data-attribute="${e}"][value="${t}"]`);if(n){const s=n.nextElementSibling;s&&s.classList.contains("switcher-card")?s.classList.add("active"):"data-font-body"===e||"data-font-heading"===e?n.value=t:n.closest(".list-group-item")?.classList.contains("form-check")&&n.closest(".list-group-item")?.classList.add("active")}}function n(){Object.keys(ATTRIBUTES).forEach((e=>{const n=ATTRIBUTES[e],o=sessionStorage.getItem(n)||DEFAULT_VALUES[n];document.documentElement.setAttribute(n,o),"AUTH_LAYOUT"!==n&&sessionStorage.setItem(n,o),t(n,o),n===ATTRIBUTES.MAIN_LAYOUT&&"horizontal"===o?document.getElementById("sidebarMenu")?.classList.add("container-fluid"):n===ATTRIBUTES.MAIN_LAYOUT&&document.getElementById("sidebarMenu")?.classList.remove("container-fluid"),n!==ATTRIBUTES.MAIN_LAYOUT||"vertical"!==o&&"two-column"!==o||s(),n===ATTRIBUTES.DIRECTION_MODE&&updateLayoutDirection(o)})),e(sessionStorage.getItem(ATTRIBUTES.THEME)||DEFAULT_VALUES[ATTRIBUTES.THEME])}function s(){setTimeout((()=>{const e=document.getElementById("sidebarMenu");if(e){const t=document.getElementById("all-menu-items");t&&(e.innerHTML=t.parentElement.innerHTML),e.classList.add("simplebar"),window.SimpleBar&&(new SimpleBar(e),dropdownInit())}}),100)}function o(n,o){n===ATTRIBUTES.MAIN_LAYOUT&&("vertical"===o||"two-column"===o?(s(),setTimeout((()=>{findActiveMenu(o)}),0)):setTimeout((()=>{setTimeout((()=>{const e=document.getElementById("sidebarMenu");if(e&&e.classList.contains("simplebar")&&window.SimpleBar){const t=SimpleBar.instances.get(e);if(t){t.unMount();const n=document.getElementById("all-menu-items");n&&(e.innerHTML=n.parentElement.innerHTML),dropdownInit()}}}),500)}),0),"horizontal"===o?document.getElementById("sidebarMenu")?.classList.add("container-fluid"):document.getElementById("sidebarMenu")?.classList.remove("container-fluid")),"AUTH_LAYOUT"!==n&&sessionStorage.setItem(n,o),document.documentElement.setAttribute(n,o),n===ATTRIBUTES.DIRECTION_MODE&&updateLayoutDirection(o),n===ATTRIBUTES.THEME&&e(o),t(n,o)}function i(){Object.keys(DEFAULT_VALUES).forEach((e=>{o(e,DEFAULT_VALUES[e])}))}function a(){var e=document.getElementById("preloader");e&&"hidden"!==ATTRIBUTES.PAGE_LOADER?setTimeout((function(){e.classList.add("hidden")}),1500):e?.classList.add("hidden")}function c(){if(a(),!1===DEFAULT_VALUES.AUTH_LAYOUT){n(),function(){const e=document.getElementById("switcher");e&&e.addEventListener("change",(e=>{const n=e.target,s=n.getAttribute("data-attribute");if(!s)return;const i=n.value;o(s,i),t(s,i)}))}();const e=document.getElementById("resetSettings");e&&e.addEventListener("click",i)}window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",(t=>{sessionStorage.getItem(ATTRIBUTES.THEME)===THEME_MODES.SYSTEM&&e(THEME_MODES.SYSTEM)}))}updateLayoutDirection=e=>{setTimeout((()=>{const t=document.getElementById("bootstrap-style"),n=document.getElementById("app-style"),s=document.getElementById("custom-style");null!==t&&null!==n&&("rtl"===e?(t.href=t.href.replace("bootstrap.min.css","bootstrap-rtl.min.css"),n.href=n.href.replace("app.min.css","app-rtl.min.css"),s.href=s.href.replace("custom.min.css","custom-rtl.min.css")):(t.href=t.href.replace("bootstrap-rtl.min.css","bootstrap.min.css"),n.href=n.href.replace("app-rtl.min.css","app.min.css"),s.href=s.href.replace("custom-rtl.min.css","custom.min.css")))}),100)},setTimeout((()=>{const e=document.querySelector(".sidebar-toggle"),t=document.querySelector(".small-screen-horizontal-toggle"),n=document.documentElement,s=document.querySelector(".app-sidebar"),i=document.querySelector(".horizontal-overlay");e?.addEventListener("click",(()=>{o("data-main-layout","small-icon"===n.getAttribute("data-main-layout")?"vertical":"small-icon")})),t?.addEventListener("click",(()=>{s.classList.toggle("show"),i.classList.toggle("show")}))}),100),document.addEventListener("DOMContentLoaded",(()=>{c();const n=document.getElementById("light-theme"),s=document.getElementById("dark-theme"),o=document.getElementById("system-theme");n?.addEventListener("click",(()=>{e(THEME_MODES.LIGHT),t("data-bs-theme","light")})),s?.addEventListener("click",(()=>{e(THEME_MODES.DARK),t("data-bs-theme","dark")})),o?.addEventListener("click",(()=>{e(THEME_MODES.SYSTEM),t("data-bs-theme","auto")}))})),!1===DEFAULT_VALUES.AUTH_LAYOUT?(c(),n(),window.addEventListener("resize",(function(){const e=sessionStorage.getItem("data-main-layout");e&&"horizontal"!==e&&(window.innerWidth<768.99?sessionStorage.setItem(ATTRIBUTES.MAIN_LAYOUT,"close-sidebar"):window.innerWidth<1250?sessionStorage.setItem(ATTRIBUTES.MAIN_LAYOUT,"small-icon"):sessionStorage.setItem(ATTRIBUTES.MAIN_LAYOUT,"vertical"),document.documentElement.setAttribute(ATTRIBUTES.MAIN_LAYOUT,sessionStorage.getItem(ATTRIBUTES.MAIN_LAYOUT)))}))):(document.documentElement.setAttribute("data-main-layout","close-sidebar"),document.documentElement.setAttribute("data-nav-position","hidden")),a()}updateLayout();
+function updateLayout() {
+    function applyTheme(themeMode) {
+        let resolvedTheme = themeMode;
+
+        if (themeMode === THEME_MODES.SYSTEM) {
+            resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? THEME_MODES.DARK
+                : THEME_MODES.LIGHT;
+        }
+
+        document.documentElement.setAttribute(ATTRIBUTES.THEME, resolvedTheme);
+        sessionStorage.setItem(ATTRIBUTES.THEME, themeMode);
+    }
+
+    function updateActiveState(attributeName, value) {
+        document.querySelectorAll(`[data-attribute="${attributeName}"]`).forEach((input) => {
+            const switcherCard = input.nextElementSibling;
+
+            if (switcherCard && switcherCard.classList.contains("switcher-card")) {
+                switcherCard.classList.remove("active");
+                return;
+            }
+
+            if (attributeName === "data-font-body" || attributeName === "data-font-heading") {
+                input.value = value;
+                return;
+            }
+
+            const listItem = input.closest(".list-group-item");
+            if (listItem?.classList.contains("form-check")) {
+                listItem.classList.remove("active");
+            }
+        });
+
+        const activeInput = document.querySelector(`[data-attribute="${attributeName}"][value="${value}"]`);
+        if (!activeInput) {
+            return;
+        }
+
+        const switcherCard = activeInput.nextElementSibling;
+        if (switcherCard && switcherCard.classList.contains("switcher-card")) {
+            switcherCard.classList.add("active");
+            return;
+        }
+
+        if (attributeName === "data-font-body" || attributeName === "data-font-heading") {
+            activeInput.value = value;
+            return;
+        }
+
+        const listItem = activeInput.closest(".list-group-item");
+        if (listItem?.classList.contains("form-check")) {
+            listItem.classList.add("active");
+        }
+    }
+
+    function rebuildSidebarMenu() {
+        setTimeout(() => {
+            const sidebarMenu = document.getElementById("sidebarMenu");
+            if (!sidebarMenu) {
+                return;
+            }
+
+            const allMenuItems = document.getElementById("all-menu-items");
+            if (allMenuItems) {
+                sidebarMenu.innerHTML = allMenuItems.parentElement.innerHTML;
+            }
+
+            sidebarMenu.classList.add("simplebar");
+
+            if (window.SimpleBar) {
+                new SimpleBar(sidebarMenu);
+                dropdownInit();
+            }
+        }, 100);
+    }
+
+    function initializeLayout() {
+        Object.keys(ATTRIBUTES).forEach((key) => {
+            const attributeName = ATTRIBUTES[key];
+            const storedValue = sessionStorage.getItem(attributeName) || DEFAULT_VALUES[attributeName];
+
+            document.documentElement.setAttribute(attributeName, storedValue);
+
+            if (attributeName !== ATTRIBUTES.AUTH_LAYOUT) {
+                sessionStorage.setItem(attributeName, storedValue);
+            }
+
+            updateActiveState(attributeName, storedValue);
+
+            if (attributeName === ATTRIBUTES.MAIN_LAYOUT) {
+                if (storedValue === "horizontal") {
+                    document.getElementById("sidebarMenu")?.classList.add("container-fluid");
+                } else {
+                    document.getElementById("sidebarMenu")?.classList.remove("container-fluid");
+                }
+
+                if (storedValue === "vertical" || storedValue === "two-column") {
+                    rebuildSidebarMenu();
+                }
+            }
+
+            if (attributeName === ATTRIBUTES.DIRECTION_MODE) {
+                updateLayoutDirection(storedValue);
+            }
+        });
+
+        applyTheme(sessionStorage.getItem(ATTRIBUTES.THEME) || DEFAULT_VALUES[ATTRIBUTES.THEME]);
+    }
+
+    function applyAttribute(attributeName, value) {
+        if (attributeName === ATTRIBUTES.MAIN_LAYOUT) {
+            if (value === "vertical" || value === "two-column") {
+                rebuildSidebarMenu();
+                setTimeout(() => {
+                    findActiveMenu(value);
+                }, 0);
+            } else {
+                setTimeout(() => {
+                    setTimeout(() => {
+                        const sidebarMenu = document.getElementById("sidebarMenu");
+                        if (!sidebarMenu || !sidebarMenu.classList.contains("simplebar") || !window.SimpleBar) {
+                            return;
+                        }
+
+                        const simplebarInstance = SimpleBar.instances.get(sidebarMenu);
+                        if (!simplebarInstance) {
+                            return;
+                        }
+
+                        simplebarInstance.unMount();
+                        const allMenuItems = document.getElementById("all-menu-items");
+                        if (allMenuItems) {
+                            sidebarMenu.innerHTML = allMenuItems.parentElement.innerHTML;
+                        }
+                        dropdownInit();
+                    }, 500);
+                }, 0);
+            }
+
+            if (value === "horizontal") {
+                document.getElementById("sidebarMenu")?.classList.add("container-fluid");
+            } else {
+                document.getElementById("sidebarMenu")?.classList.remove("container-fluid");
+            }
+        }
+
+        if (attributeName !== ATTRIBUTES.AUTH_LAYOUT) {
+            sessionStorage.setItem(attributeName, value);
+        }
+
+        document.documentElement.setAttribute(attributeName, value);
+
+        if (attributeName === ATTRIBUTES.DIRECTION_MODE) {
+            updateLayoutDirection(value);
+        }
+
+        if (attributeName === ATTRIBUTES.THEME) {
+            applyTheme(value);
+        }
+
+        updateActiveState(attributeName, value);
+    }
+
+    function resetSettings() {
+        Object.keys(DEFAULT_VALUES).forEach((key) => {
+            applyAttribute(key, DEFAULT_VALUES[key]);
+        });
+    }
+
+    function hidePreloader() {
+        const preloader = document.getElementById("preloader");
+
+        if (preloader && ATTRIBUTES.PAGE_LOADER !== "hidden") {
+            setTimeout(() => {
+                preloader.classList.add("hidden");
+            }, 1500);
+        } else {
+            preloader?.classList.add("hidden");
+        }
+    }
+
+    function setupLayout() {
+        hidePreloader();
+
+        if (DEFAULT_VALUES.AUTH_LAYOUT === false) {
+            initializeLayout();
+
+            const switcher = document.getElementById("switcher");
+            if (switcher) {
+                switcher.addEventListener("change", (event) => {
+                    const input = event.target;
+                    const attributeName = input.getAttribute("data-attribute");
+                    if (!attributeName) {
+                        return;
+                    }
+
+                    applyAttribute(attributeName, input.value);
+                    updateActiveState(attributeName, input.value);
+                });
+            }
+
+            const resetButton = document.getElementById("resetSettings");
+            resetButton?.addEventListener("click", resetSettings);
+        }
+
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+            if (sessionStorage.getItem(ATTRIBUTES.THEME) === THEME_MODES.SYSTEM) {
+                applyTheme(THEME_MODES.SYSTEM);
+            }
+        });
+    }
+
+    updateLayoutDirection = (direction) => {
+        setTimeout(() => {
+            const bootstrapCss = document.getElementById("bootstrap-style");
+            const appCss = document.getElementById("app-style");
+            const customCss = document.getElementById("custom-style");
+
+            if (!bootstrapCss || !appCss) {
+                return;
+            }
+
+            if (direction === "rtl") {
+                bootstrapCss.href = bootstrapCss.href.replace("bootstrap.min.css", "bootstrap-rtl.min.css");
+                appCss.href = appCss.href.replace("app.min.css", "app-rtl.min.css");
+                customCss.href = customCss.href.replace("custom.min.css", "custom-rtl.min.css");
+            } else {
+                bootstrapCss.href = bootstrapCss.href.replace("bootstrap-rtl.min.css", "bootstrap.min.css");
+                appCss.href = appCss.href.replace("app-rtl.min.css", "app.min.css");
+                customCss.href = customCss.href.replace("custom-rtl.min.css", "custom.min.css");
+            }
+        }, 100);
+    };
+
+    setTimeout(() => {
+        const sidebarToggle = document.querySelector(".sidebar-toggle");
+        const horizontalToggle = document.querySelector(".small-screen-horizontal-toggle");
+        const root = document.documentElement;
+        const sidebar = document.querySelector(".app-sidebar");
+        const overlay = document.querySelector(".horizontal-overlay");
+
+        sidebarToggle?.addEventListener("click", () => {
+            applyAttribute(
+                ATTRIBUTES.MAIN_LAYOUT,
+                root.getAttribute(ATTRIBUTES.MAIN_LAYOUT) === "small-icon" ? "vertical" : "small-icon"
+            );
+        });
+
+        horizontalToggle?.addEventListener("click", () => {
+            sidebar?.classList.toggle("show");
+            overlay?.classList.toggle("show");
+        });
+    }, 100);
+
+    document.addEventListener("DOMContentLoaded", () => {
+        setupLayout();
+
+        const lightTheme = document.getElementById("light-theme");
+        const darkTheme = document.getElementById("dark-theme");
+        const systemTheme = document.getElementById("system-theme");
+
+        lightTheme?.addEventListener("click", () => {
+            applyTheme(THEME_MODES.LIGHT);
+            updateActiveState("data-bs-theme", "light");
+        });
+
+        darkTheme?.addEventListener("click", () => {
+            applyTheme(THEME_MODES.DARK);
+            updateActiveState("data-bs-theme", "dark");
+        });
+
+        systemTheme?.addEventListener("click", () => {
+            applyTheme(THEME_MODES.SYSTEM);
+            updateActiveState("data-bs-theme", "auto");
+        });
+    });
+
+    if (DEFAULT_VALUES.AUTH_LAYOUT === false) {
+        setupLayout();
+
+        window.addEventListener("resize", () => {
+            const currentLayout = sessionStorage.getItem("data-main-layout");
+            if (!currentLayout || currentLayout === "horizontal") {
+                return;
+            }
+
+            if (window.innerWidth < 768.99) {
+                sessionStorage.setItem(ATTRIBUTES.MAIN_LAYOUT, "close-sidebar");
+            } else if (window.innerWidth < 1250) {
+                sessionStorage.setItem(ATTRIBUTES.MAIN_LAYOUT, "small-icon");
+            } else {
+                sessionStorage.setItem(ATTRIBUTES.MAIN_LAYOUT, "vertical");
+            }
+
+            document.documentElement.setAttribute(
+                ATTRIBUTES.MAIN_LAYOUT,
+                sessionStorage.getItem(ATTRIBUTES.MAIN_LAYOUT)
+            );
+        });
+    } else {
+        document.documentElement.setAttribute("data-main-layout", "close-sidebar");
+        document.documentElement.setAttribute("data-nav-position", "hidden");
+    }
+
+    hidePreloader();
+}
+
+updateLayout();

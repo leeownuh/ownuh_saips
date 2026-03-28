@@ -1,8 +1,8 @@
 <?php
 /**
- * Ownuh SAIPS — Email Service
+ * Ownuh SAIPS â€” Email Service
  * Handles sending emails via SMTP, SendGrid, or AWS SES.
- * SRS §5.2 — Alerts & Notifications
+ * SRS Â§5.2 â€” Alerts & Notifications
  * 
  * Supports templated emails with placeholder substitution.
  */
@@ -18,7 +18,7 @@ class EmailService
     private string $provider;
     
     // Email templates
-    private const TEMPLATES = [
+    private static array $templates = [
         'password_reset' => [
             'subject' => 'Password Reset Request - {{app_name}}',
             'body' => 'Hello {{display_name}},\n\nA password reset was requested for your account. Click the link below to reset your password:\n\n{{reset_link}}\n\nThis link expires in {{expires_in}}.\n\nIf you did not request this reset, please ignore this email or contact your administrator.\n\nBest regards,\n{{app_name}} Security Team',
@@ -30,6 +30,10 @@ class EmailService
         'account_locked' => [
             'subject' => 'Account Locked - {{app_name}}',
             'body' => 'Hello {{display_name}},\n\nYour account has been locked due to too many failed login attempts.\n\nIf this was not you, please contact your administrator immediately.\n\nLast failed attempt from IP: {{ip_address}}\nTime: {{timestamp}}\n\nBest regards,\n{{app_name}} Security Team',
+        ],
+        'admin_account_locked_alert' => [
+            'subject' => '[Security Alert] Account Locked - {{locked_email}}',
+            'body' => 'Hello {{display_name}},\n\nA user account has been locked after repeated failed login attempts.\n\nLocked account: {{locked_email}}\nRole: {{locked_role}}\nTrigger: {{lock_reason}}\nSource IP: {{ip_address}}\nTime: {{timestamp}}\n\nPlease review the account, audit trail, and recent login activity.\n\nBest regards,\n{{app_name}} Security Team',
         ],
         'mfa_enrolled' => [
             'subject' => 'MFA Enabled on Your Account - {{app_name}}',
@@ -71,7 +75,7 @@ class EmailService
      */
     public function sendTemplate(string $to, string $template, array $data = [], array $options = []): array
     {
-        if (!isset(self::TEMPLATES[$template])) {
+        if (!isset(self::$templates[$template])) {
             return [
                 'success' => false,
                 'error' => "Unknown template: {$template}",
@@ -79,7 +83,7 @@ class EmailService
             ];
         }
         
-        $templateData = self::TEMPLATES[$template];
+        $templateData = self::$templates[$template];
         
         // Add default data
         $data = array_merge([
@@ -203,20 +207,54 @@ class EmailService
      */
     private function sendViaSMTP(string $to, string $subject, string $body, array $options): array
     {
+        $isHtml = (bool)($options['is_html'] ?? false);
+        $attachments = $options['attachments'] ?? [];
         $headers = [];
-        $headers[] = 'From: ' . ($this->config['from_name'] ?? 'Ownuh SAIPS') . ' <' . ($this->config['from_email'] ?? 'security@example.com') . '>';
-        $headers[] = 'Reply-To: ' . ($this->config['reply_to'] ?? $this->config['from_email'] ?? 'security@example.com');
+        $headers[] = 'From: ' . ($this->config['from_name'] ?? 'Ownuh SAIPS') . ' <' . ($this->config['from_email'] ?? 'security@ownuh-saips.com') . '>';
+        $headers[] = 'Reply-To: ' . ($this->config['reply_to'] ?? $this->config['from_email'] ?? 'security@ownuh-saips.com');
         $headers[] = 'X-Mailer: Ownuh-SAIPS/1.0';
-        $headers[] = 'Content-Type: text/plain; charset=UTF-8';
-        
+        $headers[] = 'MIME-Version: 1.0';
+
         if (!empty($options['cc'])) {
             $headers[] = 'Cc: ' . $options['cc'];
         }
         if (!empty($options['bcc'])) {
             $headers[] = 'Bcc: ' . $options['bcc'];
         }
+
+        $messageBody = $body;
+        if (is_array($attachments) && $attachments !== []) {
+            $boundary = 'saips-mixed-' . bin2hex(random_bytes(8));
+            $headers[] = 'Content-Type: multipart/mixed; boundary="' . $boundary . '"';
+
+            $parts = [];
+            $parts[] = '--' . $boundary;
+            $parts[] = 'Content-Type: ' . ($isHtml ? 'text/html' : 'text/plain') . '; charset=UTF-8';
+            $parts[] = 'Content-Transfer-Encoding: 8bit';
+            $parts[] = '';
+            $parts[] = $body;
+
+            foreach ($attachments as $attachment) {
+                $filename = (string)($attachment['filename'] ?? 'attachment.bin');
+                $contentType = (string)($attachment['content_type'] ?? 'application/octet-stream');
+                $content = (string)($attachment['content'] ?? '');
+
+                $parts[] = '--' . $boundary;
+                $parts[] = 'Content-Type: ' . $contentType . '; name="' . $filename . '"';
+                $parts[] = 'Content-Disposition: attachment; filename="' . $filename . '"';
+                $parts[] = 'Content-Transfer-Encoding: base64';
+                $parts[] = '';
+                $parts[] = chunk_split(base64_encode($content));
+            }
+
+            $parts[] = '--' . $boundary . '--';
+            $parts[] = '';
+            $messageBody = implode("\r\n", $parts);
+        } else {
+            $headers[] = 'Content-Type: ' . ($isHtml ? 'text/html' : 'text/plain') . '; charset=UTF-8';
+        }
         
-        $success = mail($to, $subject, $body, implode("\r\n", $headers));
+        $success = mail($to, $subject, $messageBody, implode("\r\n", $headers));
         
         if ($success) {
             return [
@@ -268,6 +306,8 @@ class EmailService
     private function sendViaSendGrid(string $to, string $subject, string $body, array $options): array
     {
         $apiKey = $this->config['sendgrid_api_key'] ?? $_ENV['SENDGRID_API_KEY'] ?? '';
+        $isHtml = (bool)($options['is_html'] ?? false);
+        $attachments = $options['attachments'] ?? [];
         
         if (!$apiKey) {
             error_log("[EMAIL] SendGrid not configured. Would send to {$to}: {$subject}");
@@ -286,16 +326,40 @@ class EmailService
                 ]
             ],
             'from' => [
-                'email' => $this->config['from_email'] ?? 'security@example.com',
+                'email' => $this->config['from_email'] ?? 'security@ownuh-saips.com',
                 'name' => $this->config['from_name'] ?? 'Ownuh SAIPS',
             ],
             'content' => [
                 [
-                    'type' => 'text/plain',
+                    'type' => $isHtml ? 'text/html' : 'text/plain',
                     'value' => $body,
                 ]
             ],
         ];
+
+        $replyTo = $this->config['reply_to'] ?? $this->config['from_email'] ?? null;
+        if (is_string($replyTo) && $replyTo !== '') {
+            $data['reply_to'] = ['email' => $replyTo];
+        }
+
+        if (!empty($options['cc'])) {
+            $data['personalizations'][0]['cc'] = [['email' => (string)$options['cc']]];
+        }
+
+        if (!empty($options['bcc'])) {
+            $data['personalizations'][0]['bcc'] = [['email' => (string)$options['bcc']]];
+        }
+
+        if (is_array($attachments) && $attachments !== []) {
+            $data['attachments'] = array_map(static function(array $attachment): array {
+                return [
+                    'content' => base64_encode((string)($attachment['content'] ?? '')),
+                    'type' => (string)($attachment['content_type'] ?? 'application/octet-stream'),
+                    'filename' => (string)($attachment['filename'] ?? 'attachment.bin'),
+                    'disposition' => 'attachment',
+                ];
+            }, $attachments);
+        }
         
         $ch = curl_init('https://api.sendgrid.com/v3/mail/send');
         curl_setopt_array($ch, [
@@ -311,6 +375,7 @@ class EmailService
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
         
         if ($httpCode >= 200 && $httpCode < 300) {
@@ -322,7 +387,7 @@ class EmailService
         
         return [
             'success' => false,
-            'error' => "SendGrid error: HTTP {$httpCode}",
+            'error' => $curlError !== '' ? "SendGrid transport error: {$curlError}" : "SendGrid error: HTTP {$httpCode}",
             'code' => 'SENDGRID_ERROR',
         ];
     }
@@ -343,7 +408,7 @@ class EmailService
      */
     public function addTemplate(string $name, string $subject, string $body): void
     {
-        self::TEMPLATES[$name] = [
+        self::$templates[$name] = [
             'subject' => $subject,
             'body' => $body,
         ];

@@ -1,5 +1,5 @@
 -- ============================================================
--- Ownuh SAIPS — Full Database Schema
+-- Ownuh SAIPS â€” Full Database Schema
 -- Version: 1.0.0 | Engine: MySQL 8.0+ / MariaDB 10.11+
 -- Run this against ownuh_saips database as root
 -- See DATABASE.md for architecture notes
@@ -8,7 +8,7 @@
 SET FOREIGN_KEY_CHECKS = 0;
 SET sql_mode = 'STRICT_ALL_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO';
 
--- ─── USERS ──────────────────────────────────────────────────────────────────
+-- â”€â”€â”€ USERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS users (
     id                      INT UNSIGNED    NOT NULL AUTO_INCREMENT PRIMARY KEY,
     display_name            VARCHAR(120)    NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='User accounts. Passwords stored separately in ownuh_credentials.';
 
--- ─── SESSIONS ───────────────────────────────────────────────────────────────
+-- â”€â”€â”€ SESSIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS sessions (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     user_id                 CHAR(36)        NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='JWT refresh token registry. Access tokens are stateless.';
 
--- ─── AUDIT LOG ──────────────────────────────────────────────────────────────
+-- â”€â”€â”€ AUDIT LOG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS audit_log (
     id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     event_code              VARCHAR(20)     NOT NULL,
@@ -89,9 +89,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
     INDEX idx_admin_id (admin_id),
     INDEX idx_target_user (target_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Tamper-evident SHA-256 chained audit log. INSERT only — no UPDATE/DELETE grants.';
+  COMMENT='Tamper-evident SHA-256 chained audit log. INSERT only â€” no UPDATE/DELETE grants.';
 
--- ─── MFA — TOTP SECRETS ─────────────────────────────────────────────────────
+-- â”€â”€â”€ MFA â€” TOTP SECRETS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS mfa_totp_secrets (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     user_id                 CHAR(36)        NOT NULL,
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS mfa_totp_secrets (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='AES-256-GCM encrypted TOTP secrets (RFC 6238).';
 
--- ─── MFA — BACKUP CODES ─────────────────────────────────────────────────────
+-- â”€â”€â”€ MFA â€” BACKUP CODES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS mfa_backup_codes (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     user_id                 CHAR(36)        NOT NULL,
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS mfa_backup_codes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='10 single-use bcrypt-hashed backup codes per user.';
 
--- ─── MFA — FIDO2 / WEBAUTHN ─────────────────────────────────────────────────
+-- â”€â”€â”€ MFA â€” FIDO2 / WEBAUTHN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS mfa_fido2_credentials (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     user_id                 CHAR(36)        NOT NULL,
@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS mfa_fido2_credentials (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='FIDO2/WebAuthn hardware key registrations. Required for Admin+ roles.';
 
--- ─── LOGIN ATTEMPTS ──────────────────────────────────────────────────────────
+-- â”€â”€â”€ LOGIN ATTEMPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS login_attempts (
     id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     username                VARCHAR(254)    NULL DEFAULT NULL,
@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Rolling brute-force detection window. Auto-purged after 25 hours.';
 
--- ─── BLOCKED IPS ─────────────────────────────────────────────────────────────
+-- â”€â”€â”€ BLOCKED IPS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS blocked_ips (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     ip_address              VARCHAR(45)     NOT NULL,
@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS blocked_ips (
     INDEX idx_active (unblocked_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ─── GEO RULES ───────────────────────────────────────────────────────────────
+-- â”€â”€â”€ GEO RULES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS geo_rules (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     country_code            CHAR(2)         NOT NULL,
@@ -187,7 +187,7 @@ CREATE TABLE IF NOT EXISTS geo_rules (
     INDEX idx_type (rule_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ─── INCIDENTS ────────────────────────────────────────────────────────────────
+-- â”€â”€â”€ INCIDENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS incidents (
     id                          CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     incident_ref                VARCHAR(20)     NOT NULL,
@@ -218,7 +218,7 @@ CREATE TABLE IF NOT EXISTS incidents (
     INDEX idx_detected (detected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ─── RATE LIMIT CONFIG ────────────────────────────────────────────────────────
+-- â”€â”€â”€ RATE LIMIT CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS rate_limit_config (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     endpoint                VARCHAR(100)    NOT NULL,
@@ -233,7 +233,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_config (
     UNIQUE KEY uq_endpoint (endpoint)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ─── PASSWORD HISTORY ─────────────────────────────────────────────────────────
+-- â”€â”€â”€ PASSWORD HISTORY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS password_history (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     user_id                 CHAR(36)        NOT NULL,
@@ -243,12 +243,12 @@ CREATE TABLE IF NOT EXISTS password_history (
     FOREIGN KEY fk_pwhistory_user (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Last 12 password hashes for reuse prevention (SRS §2.2).';
+  COMMENT='Last 12 password hashes for reuse prevention (SRS Â§2.2).';
 
 
--- ────────────────────────────────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- PASSWORD RESETS
--- ────────────────────────────────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS password_resets (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     user_id                 CHAR(36)        NOT NULL,
@@ -265,9 +265,9 @@ CREATE TABLE IF NOT EXISTS password_resets (
     UNIQUE INDEX idx_token_hash (token_hash),
     INDEX idx_user_expires (user_id, expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Admin-initiated password reset tokens (SRS §2.3).';
+  COMMENT='Admin-initiated password reset tokens (SRS Â§2.3).';
 
--- ─── DEFAULT RATE LIMIT RULES ─────────────────────────────────────────────────
+-- â”€â”€â”€ DEFAULT RATE LIMIT RULES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 INSERT INTO rate_limit_config (endpoint, requests_limit, window_seconds, scope, action_on_breach) VALUES
 ('/auth/login',         60,  60,   'per_ip',    'block_temp'),
 ('/auth/token',         60,  60,   'per_ip',    'block_temp'),
@@ -275,13 +275,13 @@ INSERT INTO rate_limit_config (endpoint, requests_limit, window_seconds, scope, 
 ('/auth/mfa/email-otp', 5,   3600, 'per_user',  'block_temp'),
 ('/api/*',              300, 60,   'per_token', 'rate_429');
 
--- ─── DEFAULT GEO DENY RULES ───────────────────────────────────────────────────
--- Populated by admin — no defaults inserted here.
+-- â”€â”€â”€ DEFAULT GEO DENY RULES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- Populated by admin â€” no defaults inserted here.
 -- See ips-geo-block.html for the admin interface.
 
 SET FOREIGN_KEY_CHECKS = 1;
 
--- ─── VIEWS ────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€ VIEWS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 -- Active sessions view (non-invalidated, non-expired)
 CREATE OR REPLACE VIEW v_active_sessions AS
@@ -326,7 +326,7 @@ WHERE success = 0
   AND attempted_at > NOW() - INTERVAL 10 MINUTE
 GROUP BY ip_address;
 
--- ─── STORED PROCEDURES ────────────────────────────────────────────────────────
+-- â”€â”€â”€ STORED PROCEDURES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 DELIMITER //
 
@@ -411,8 +411,8 @@ END //
 
 DELIMITER ;
 
--- ─── ALERT RULES ─────────────────────────────────────────────────────────────
--- Used by settings-alert-rules.php — SRS §5.2 Webhook / Alert Dispatcher
+-- â”€â”€â”€ ALERT RULES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- Used by settings-alert-rules.php â€” SRS Â§5.2 Webhook / Alert Dispatcher
 CREATE TABLE IF NOT EXISTS alert_rules (
     id                      CHAR(36)        NOT NULL PRIMARY KEY DEFAULT (UUID()),
     rule_name               VARCHAR(120)    NOT NULL,
@@ -436,9 +436,9 @@ CREATE TABLE IF NOT EXISTS alert_rules (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Alert rules for webhook/email/Slack notifications on security events.';
 
--- ─── SYSTEM SETTINGS ─────────────────────────────────────────────────────────
+-- â”€â”€â”€ SYSTEM SETTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Key-value store for runtime configuration (MFA policy, thresholds, etc.)
--- Used by settings-mfa.php, settings-policy.php — SRS §7.1
+-- Used by settings-mfa.php, settings-policy.php â€” SRS Â§7.1
 CREATE TABLE IF NOT EXISTS system_settings (
     setting_key             VARCHAR(100)    NOT NULL PRIMARY KEY,
     setting_value           TEXT            NOT NULL,
@@ -449,7 +449,28 @@ CREATE TABLE IF NOT EXISTS system_settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Runtime system configuration. Keys namespaced e.g. mfa.admin_required.';
 
--- ─── CREDENTIALS ALIAS (main DB) ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS executive_reports (
+    id                      CHAR(36)        NOT NULL PRIMARY KEY,
+    generated_by            CHAR(36)        NULL DEFAULT NULL,
+    delivery_channel        VARCHAR(20)     NOT NULL DEFAULT 'manual',
+    report_format           VARCHAR(20)     NOT NULL DEFAULT 'onscreen',
+    provider                VARCHAR(40)     NOT NULL DEFAULT 'fallback',
+    model                   VARCHAR(100)    NULL DEFAULT NULL,
+    cadence                 VARCHAR(20)     NULL DEFAULT NULL,
+    report_title            VARCHAR(255)    NOT NULL,
+    overall_posture         VARCHAR(50)     NULL DEFAULT NULL,
+    report_json             LONGTEXT        NOT NULL,
+    snapshot_json           LONGTEXT        NOT NULL,
+    email_recipients        TEXT            NULL,
+    generated_at            DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_exec_reports_generated_at (generated_at),
+    INDEX idx_exec_reports_channel (delivery_channel),
+    CONSTRAINT fk_exec_reports_user FOREIGN KEY (generated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Stored executive posture reports generated manually or by scheduler.';
+
+-- â”€â”€â”€ CREDENTIALS ALIAS (main DB) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- register.php falls back to this table when ownuh_credentials DB is unreachable.
 -- Mirrors the structure of ownuh_credentials.credentials for portability.
 CREATE TABLE IF NOT EXISTS user_credentials (
@@ -464,7 +485,7 @@ CREATE TABLE IF NOT EXISTS user_credentials (
     INDEX idx_created (created_at),
     FOREIGN KEY fk_ucred_user (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Fallback credential store in main DB. Primary store is ownuh_credentials DB (SRS §2.3).';
+  COMMENT='Fallback credential store in main DB. Primary store is ownuh_credentials DB (SRS Â§2.3).';
 
 -- Default seed data for alert_rules
 INSERT IGNORE INTO alert_rules (id, rule_name, event_type, channel, threshold_count, window_minutes, destination, created_by)
@@ -475,7 +496,7 @@ SELECT
     'email',
     5,
     15,
-    'security@ownuh.local',
+    'security@ownuh-saips.com',
     id
 FROM users WHERE role = 'superadmin' LIMIT 1;
 
@@ -487,7 +508,7 @@ SELECT
     'email',
     1,
     5,
-    'security@ownuh.local',
+    'security@ownuh-saips.com',
     id
 FROM users WHERE role = 'superadmin' LIMIT 1;
 
@@ -499,7 +520,7 @@ SELECT
     'email',
     1,
     1,
-    'security@ownuh.local',
+    'security@ownuh-saips.com',
     id
 FROM users WHERE role = 'superadmin' LIMIT 1;
 
@@ -513,4 +534,7 @@ INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES
     ('mfa.allow_fido2',     '1'),
     ('mfa.totp_window',     '1'),
     ('mfa.email_otp_ttl',   '600'),
-    ('mfa.email_otp_rate',  '5');
+    ('mfa.email_otp_rate',  '5'),
+    ('executive_reports.email_enabled', '1'),
+    ('executive_reports.cadence', 'weekly'),
+    ('executive_reports.attach_format', 'none');

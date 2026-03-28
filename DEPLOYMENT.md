@@ -1,5 +1,7 @@
 # DEPLOYMENT.md - Ownuh SAIPS Production, ngrok & GitHub Setup
 
+This guide is written for two goals: getting the app online safely, and making sure the public-facing demo keeps its polish once it leaves localhost.
+
 ## Contents
 
 1. GitHub push
@@ -33,6 +35,11 @@ Never commit:
 - local tunnel URLs
 
 If a private key was committed in the past, rotate it and clean history before pushing publicly.
+
+For a stronger GitHub first impression, make sure the repo lands with:
+- seeded demo data that matches the screenshots and walkthrough
+- a working public URL or clear local quick start
+- executive reporting and email features configured honestly, not just described
 
 ---
 
@@ -214,6 +221,12 @@ BCRYPT_COST=14
 | `APP_URL` | `http://localhost:8080` | Public/base URL |
 | `APP_TIMEZONE` | `Asia/Kolkata` | PHP/app timezone |
 | `APP_TIMEZONE_LABEL` | `IST` | Display suffix for timestamps |
+| `OPENAI_API_KEY` | empty | Enables live AI executive-report generation |
+| `OPENAI_BASE_URL` | provider default | Optional OpenAI-compatible base URL, such as Groq |
+| `OPENAI_MODEL` | app default | Optional model override for executive reporting |
+| `EMAIL_PROVIDER` | `smtp` | Mail backend; `sendgrid` is the easiest fully supported option |
+| `EMAIL_FROM_EMAIL` | app default | Sender used for executive reports and security alerts |
+| `SENDGRID_API_KEY` | empty | Required when `EMAIL_PROVIDER=sendgrid` |
 | `DB_HOST` | `127.0.0.1` | Main DB host |
 | `DB_AUTH_HOST` | `127.0.0.1` | Credentials DB host |
 | `JWT_PRIVATE_KEY_PATH` | `keys/private.pem` | Private signing key |
@@ -233,6 +246,10 @@ BCRYPT_COST=14
 - [ ] Linux setup tested with `install.sh` if sharing with Linux reviewers
 - [ ] For ngrok: `TRUSTED_PROXY=any` and `COOKIE_SAMESITE=Lax` are set
 - [ ] Password reset flow tested end to end
+- [ ] Executive report generation, history, and export tested once after deploy
+- [ ] Scheduled executive-report cadence and attachment settings reviewed in `settings-compliance.php`
+- [ ] Weekly executive-report email tested with the chosen provider
+- [ ] At least one alert-rule event tested end to end for email delivery
 - [ ] `auth-create-password.php` tested after sign-in
 - [ ] MFA recovery tested with admin-issued bypass token
 - [ ] IPS pages checked with fresh failed-login data

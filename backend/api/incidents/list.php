@@ -16,6 +16,7 @@ header('Content-Type: application/json');
 
 use SAIPS\Middleware\AuditMiddleware;
 use SAIPS\Middleware\AuthMiddleware;
+use SAIPS\Services\AlertDispatcherService;
 
 $dbConfig  = require __DIR__ . '/../../config/database.php';
 $secConfig = require __DIR__ . '/../../config/security.php';
@@ -128,6 +129,14 @@ if ($method === 'POST' && !preg_match('#/incidents/[^/]+#', $uri)) {
     }
 
     http_response_code(201);
+    (new AlertDispatcherService())->dispatch('INC-001', [
+        'event_code' => 'INC-001',
+        'summary' => (string)$body['trigger_summary'],
+        'incident_ref' => $ref,
+        'user_email' => (string)($payload['email'] ?? ''),
+        'ip_address' => (string)($body['source_ip'] ?? ''),
+        'match_count' => 1,
+    ]);
     echo json_encode(['status' => 'success', 'incident_ref' => $ref]);
     exit;
 }
@@ -161,6 +170,15 @@ if ($method === 'PUT' && preg_match('#/incidents/([a-zA-Z0-9-]+)$#', $uri, $m)) 
     }
 
     echo json_encode(['status' => 'success', 'message' => 'Incident updated.']);
+    if (($body['status'] ?? null) === 'in_progress' || ($body['status'] ?? null) === 'resolved') {
+        (new AlertDispatcherService())->dispatch('INC-002', [
+            'event_code' => 'INC-002',
+            'summary' => 'Incident status updated to ' . (string)$body['status'],
+            'incident_ref' => $ref,
+            'user_email' => (string)($payload['email'] ?? ''),
+            'match_count' => 1,
+        ]);
+    }
     exit;
 }
 

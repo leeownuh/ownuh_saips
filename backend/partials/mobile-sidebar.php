@@ -23,7 +23,7 @@
                             <ul class="slide-menu child1">
                                 <li class="slide"><a href="login.php" class="side-menu__item">Sign In</a></li>
                                 <li class="slide"><a href="otp-verify.php" class="side-menu__item">MFA Verify</a></li>
-                                <li class="slide"><a href="auth-lockscreen.html" class="side-menu__item">Session Lock</a></li>
+                                <li class="slide"><a href="auth-lockscreen.php" class="side-menu__item">Session Lock</a></li>
                                 <li class="slide"><a href="forgot-password.php" class="side-menu__item">Reset Password</a></li>
                                 <li class="slide"><a href="auth-create-password.php" class="side-menu__item">Create Password</a></li>
                             </ul>
@@ -79,10 +79,10 @@
                         <li class="menu-title" role="presentation">System</li>
                         <li class="slide has-sub"><a href="#!" class="side-menu__item"><span class="side_menu_icon"><i class="ri-error-warning-line"></i></span><span class="side-menu__label">Error Pages</span><i class="ri-arrow-down-s-line side-menu__angle"></i></a>
                             <ul class="slide-menu child1">
-                                <li class="slide"><a href="auth-401.html" class="side-menu__item">401 Unauthorized</a></li>
-                                <li class="slide"><a href="auth-404.html" class="side-menu__item">404 Not Found</a></li>
-                                <li class="slide"><a href="auth-500.html" class="side-menu__item">500 Server Error</a></li>
-                                <li class="slide"><a href="under-maintenance.html" class="side-menu__item">Maintenance</a></li>
+                                <li class="slide"><a href="auth-401.php" class="side-menu__item">401 Unauthorized</a></li>
+                                <li class="slide"><a href="auth-404.php" class="side-menu__item">404 Not Found</a></li>
+                                <li class="slide"><a href="auth-500.php" class="side-menu__item">500 Server Error</a></li>
+                                <li class="slide"><a href="under-maintenance.php" class="side-menu__item">Maintenance</a></li>
                             </ul>
                         </li>
                     </ul>

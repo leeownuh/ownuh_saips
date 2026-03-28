@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /**
- * Ownuh SAIPS — Alert Rules Management (live from DB)
+ * Ownuh SAIPS â€” Alert Rules Management (live from DB)
  * CAP512: PHP + MySQL, OOP, arrays, string functions, control flow
  */
 require_once __DIR__ . '/backend/bootstrap.php';
@@ -282,9 +282,9 @@ $eventTypes = [
                         <div class="col-md-6">
                             <label class="form-label">Event Type</label>
                             <select name="event_type" class="form-select" required>
-                                <option value="">Select event…</option>
+                                <option value="">Select eventâ€¦</option>
                                 <?php foreach ($eventTypes as $code => $label): ?>
-                                <option value="<?= esc($code) ?>"><?= esc($code) ?> — <?= esc($label) ?></option>
+                                <option value="<?= esc($code) ?>"><?= esc($code) ?> â€” <?= esc($label) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -308,7 +308,7 @@ $eventTypes = [
                         <div class="col-12">
                             <label class="form-label" id="destLabel">Destination (email address)</label>
                             <input type="text" name="destination" class="form-control" id="destInput"
-                                   placeholder="security@yourcompany.com" required>
+                                   placeholder="security@ownuh-saips.com" required>
                         </div>
                     </div>
                 </div>
@@ -333,7 +333,7 @@ const channelSelect = document.getElementById('channelSelect');
 const destLabel     = document.getElementById('destLabel');
 const destInput     = document.getElementById('destInput');
 const hints = {
-    email:   ['Destination (email address)',        'security@yourcompany.com'],
+    email:   ['Destination (email address)',        'security@ownuh-saips.com'],
     slack:   ['Destination (Slack webhook URL)',     'https://hooks.slack.com/services/...'],
     webhook: ['Destination (webhook URL)',           'https://your-siem.example.com/webhook'],
     sms:     ['Destination (E.164 phone number)',    '+61412345678'],

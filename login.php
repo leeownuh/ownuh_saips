@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 /**
- * Ownuh SAIPS — PHP Login Page
+ * Ownuh SAIPS â€” PHP Login Page
  * Demonstrates: PHP basics, variables, control flow, strings,
- * sessions, mysqli, OOP — CAP512 Units I–VII
+ * sessions, mysqli, OOP â€” CAP512 Units Iâ€“VII
  */
 
 require_once __DIR__ . '/backend/bootstrap.php';
@@ -25,9 +25,9 @@ $error   = '';
 $success = '';
 $email   = '';
 
-// CAP512 Unit 3: Control flow — handle POST
+// CAP512 Unit 3: Control flow â€” handle POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Verify CSRF token — rotate after each POST (prevents token reuse)
+    // Verify CSRF token â€” rotate after each POST (prevents token reuse)
     if (!verify_csrf($_POST['csrf_token'] ?? null)) {
         $error = 'Invalid request. Please try again.';
         // Invalidate used/failed token and issue a new one
@@ -37,11 +37,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Rotate CSRF token after successful validation
     unset($_SESSION['csrf_token']);
 
-    // CAP512 Unit 4: String functions — trim, strtolower, filter_var
+    // CAP512 Unit 4: String functions â€” trim, strtolower, filter_var
     $email    = strtolower(trim($_POST['email']    ?? ''));
     $password = $_POST['password'] ?? '';
 
-    // Input validation — CAP512 Unit 3: conditions
+    // Input validation â€” CAP512 Unit 3: conditions
     if (empty($email) || empty($password)) {
         $error = 'Email and password are required.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $db   = Database::getInstance();
 
-        // CAP512 Unit 7: DB operation — look up user
+        // CAP512 Unit 7: DB operation â€” look up user
         $user = $db->fetchOne(
             'SELECT id, display_name, email, role, status,
                     mfa_enrolled, mfa_factor, failed_attempts
@@ -58,9 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         if (!$user) {
-            // Timing attack prevention — always run bcrypt
+            // Timing attack prevention â€” always run bcrypt
             password_verify($password, '$2y$12$dummyhashplaceholder111111111111111111111111111111111111');
-            // BUG-02 FIX: Log failed auth to audit_log — was never recorded in the PHP-session layer.
+            // BUG-02 FIX: Log failed auth to audit_log â€” was never recorded in the PHP-session layer.
             AuditMiddleware::authFailure($email, $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0', 'user_not_found', 0);
             $error = 'Invalid email or password.';
         } elseif ($user['status'] === 'locked') {
@@ -104,13 +104,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $passwordOk = $hashRow && password_verify($password, $hashRow['password_hash']);
 
             if (!$passwordOk) {
-                // Increment failed attempts — CAP512 Unit 7: UPDATE
+                // Increment failed attempts â€” CAP512 Unit 7: UPDATE
                 $db->execute(
                     'UPDATE users SET failed_attempts = failed_attempts + 1, last_failed_at = NOW() WHERE id = ?',
                     [$user['id']]
                 );
 
-                // Check lockout — CAP512 Unit 3: control flow
+                // Check lockout â€” CAP512 Unit 3: control flow
                 $newAttempts = (int)$user['failed_attempts'] + 1;
 
                 // BUG-02 FIX: Log failed password attempt (and lockout) to audit_log.
@@ -127,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error = 'Invalid email or password.';
                 }
             } else {
-                // SUCCESS — CAP512 Unit 7: UPDATE last login
+                // SUCCESS â€” CAP512 Unit 7: UPDATE last login
                 $db->execute(
                     'UPDATE users SET failed_attempts = 0, last_failed_at = NULL,
                             last_login_at = NOW(), last_login_ip = ?
@@ -138,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Regenerate session ID to prevent session fixation (OWASP A2)
                 session_regenerate_id(true);
 
-                // If MFA enrolled — go to OTP page
+                // If MFA enrolled â€” go to OTP page
                 if ($user['mfa_enrolled']) {
                     // Store pending session in PHP session (CAP512 Unit 2: sessions)
                     $_SESSION['mfa_pending'] = [
@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['mfa_otp_expires'] = time() + 600; // 10 min
                         log_dev_otp($user['email'], $otp);
                         // In production: send via email. Log for dev:
-                        // SECURITY: OTP must be dispatched via EmailService — never log credentials
+                        // SECURITY: OTP must be dispatched via EmailService â€” never log credentials
                     }
 
                     AuditMiddleware::log('AUTH-000', 'MFA Challenge Issued', $user['id'],
@@ -166,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
 
-                // No MFA — issue JWT token and go to dashboard
+                // No MFA â€” issue JWT token and go to dashboard
                 // BUG-02 FIX: Log successful login (no MFA path) to audit_log.
                 AuditMiddleware::authSuccess(
                     $user['id'],
@@ -176,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     0
                 );
                 $token = create_jwt_token([
-    'sub'   => $user['id'], // 🔴 REQUIRED for your middleware
+    'sub'   => $user['id'], // ðŸ”´ REQUIRED for your middleware
     'id'    => $user['id'], // keep for compatibility
     'email' => $user['email'],
     'role'  => $user['role'],
@@ -230,7 +230,7 @@ $refreshHash  = hash('sha256', $refreshToken);
     error_log('[SAIPS] Redis session store failed: ' . $e->getMessage());
 }
     } catch (Throwable $e) {
-        // Non-fatal — session KPI may lag but auth still works
+        // Non-fatal â€” session KPI may lag but auth still works
         error_log('[SAIPS] Session insert failed: ' . $e->getMessage());
     }
 }
@@ -311,7 +311,7 @@ $refreshHash  = hash('sha256', $refreshToken);
                                     <p class="text-muted mb-0">Enter your credentials to access the Security Dashboard.</p>
                                 </div>
 
-                                <!-- Error/Success alerts — CAP512 Unit 2: conditional rendering -->
+                                <!-- Error/Success alerts â€” CAP512 Unit 2: conditional rendering -->
                                 <?php if ($error): ?>
                                 <div class="alert alert-danger d-flex gap-2 py-2">
                                     <i class="ri-error-warning-line flex-shrink-0"></i>
@@ -319,7 +319,7 @@ $refreshHash  = hash('sha256', $refreshToken);
                                 </div>
                                 <?php endif; ?>
 
-                                <!-- Login form — CAP512 Unit 2: forms + PHP processing -->
+                                <!-- Login form â€” CAP512 Unit 2: forms + PHP processing -->
                                 <form method="POST" action="login.php" class="form-custom mt-3">
                                     <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
 
@@ -329,11 +329,11 @@ $refreshHash  = hash('sha256', $refreshToken);
                                         </label>
                                         <div class="input-group">
                                             <span class="input-group-text bg-transparent"><i class="ri-mail-line text-muted"></i></span>
-                                            <!-- CAP512 Unit 4: String output — preserve submitted value -->
+                                            <!-- CAP512 Unit 4: String output â€” preserve submitted value -->
                                             <input type="email" class="form-control <?= $error ? 'is-invalid' : '' ?>"
                                                    id="login-email" name="email"
                                                    value="<?= esc($email) ?>"
-                                                   placeholder="you@organisation.com"
+                                                   placeholder="you@ownuh-saips.com"
                                                    autocomplete="username" required>
                                         </div>
                                     </div>

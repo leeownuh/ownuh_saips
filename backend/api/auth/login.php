@@ -23,6 +23,8 @@ require_once dirname(__DIR__, 2) . '/bootstrap.php';
 use SAIPS\Middleware\AuditMiddleware;
 use SAIPS\Middleware\IpCheckMiddleware;
 use SAIPS\Middleware\RateLimitMiddleware;
+use SAIPS\Services\EmailService;
+use SAIPS\Services\AlertDispatcherService;
 
 header('Content-Type: application/json');
 header('X-Content-Type-Options: nosniff');
@@ -197,7 +199,8 @@ if ($riskScore >= 40 || $user['mfa_enrolled']) {
     if ($user['mfa_factor'] === 'email_otp') {
         $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $redis->setex("saips:email_otp:{$user['id']}", 600, $otp);
-        // OTP dispatched via EmailService — never log credentials in production
+        log_dev_otp($user['email'], $otp);
+        // OTP dispatched via EmailService in production.
     }
 
     echo json_encode([
@@ -254,11 +257,75 @@ function _checkLockout(\PDO $pdo, array $user, int $attempt, string $ip, array $
     if ($attempt >= $perUserHard['failures']) {
         $pdo->prepare("UPDATE users SET status = 'locked' WHERE id = ?")->execute([$user['id']]);
         AuditMiddleware::accountLocked($user['id'], 'hard', "10 failures in 24h window");
-        // Admin email alert would be dispatched here via AlertService
+        _notifyLockoutAdmins($pdo, $user, $ip, '10 failures in 24h window');
+        (new AlertDispatcherService())->dispatch('AUTH-003', [
+            'event_code' => 'AUTH-003',
+            'summary' => 'User account locked after repeated failed login attempts.',
+            'user_email' => (string)($user['email'] ?? ''),
+            'ip_address' => $ip,
+            'match_count' => $attempt,
+        ]);
     } elseif ($attempt >= $perUser['failures']) {
         // Soft lock — auto-expires in Redis
         // Admin alert dispatched by AlertService
         AuditMiddleware::accountLocked($user['id'], 'soft', "5 failures in 15 min");
+        (new AlertDispatcherService())->dispatch('AUTH-002', [
+            'event_code' => 'AUTH-002',
+            'summary' => 'Repeated failed login threshold reached.',
+            'user_email' => (string)($user['email'] ?? $user['display_name'] ?? ''),
+            'ip_address' => $ip,
+            'match_count' => $attempt,
+        ]);
+    }
+}
+
+
+function _notifyLockoutAdmins(\PDO $pdo, array $user, string $ip, string $reason): void
+{
+    try {
+        $stmt = $pdo->query(
+            "SELECT email, display_name
+             FROM users
+             WHERE deleted_at IS NULL
+               AND status = 'active'
+               AND role IN ('admin', 'superadmin')
+             ORDER BY role, display_name"
+        );
+        $recipients = $stmt ? $stmt->fetchAll() : [];
+        if (!$recipients) {
+            return;
+        }
+
+        $emailService = new EmailService([
+            'provider' => $_ENV['EMAIL_PROVIDER'] ?? 'smtp',
+            'app_name' => $_ENV['APP_NAME'] ?? 'Ownuh SAIPS',
+            'from_name' => $_ENV['EMAIL_FROM_NAME'] ?? 'Ownuh SAIPS',
+            'from_email' => $_ENV['EMAIL_FROM_EMAIL'] ?? 'security@ownuh-saips.com',
+            'reply_to' => $_ENV['EMAIL_REPLY_TO'] ?? ($_ENV['EMAIL_FROM_EMAIL'] ?? 'security@ownuh-saips.com'),
+            'sendgrid_api_key' => $_ENV['SENDGRID_API_KEY'] ?? '',
+            'aws_access_key' => $_ENV['AWS_ACCESS_KEY_ID'] ?? '',
+            'aws_secret_key' => $_ENV['AWS_SECRET_ACCESS_KEY'] ?? '',
+        ]);
+
+        foreach ($recipients as $recipient) {
+            $to = (string)($recipient['email'] ?? '');
+            if ($to === '') {
+                continue;
+            }
+
+            $emailService->sendTemplate($to, 'admin_account_locked_alert', [
+                'display_name' => (string)($recipient['display_name'] ?? 'Security Admin'),
+                'locked_email' => (string)($user['email'] ?? 'unknown'),
+                'locked_role' => (string)($user['role'] ?? 'user'),
+                'lock_reason' => $reason,
+                'ip_address' => $ip,
+                'timestamp' => date('Y-m-d H:i:s'),
+            ], [
+                'queue' => false,
+            ]);
+        }
+    } catch (Throwable $e) {
+        error_log('[SAIPS] Failed to send lockout admin alerts: ' . $e->getMessage());
     }
 }
 

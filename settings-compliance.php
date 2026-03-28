@@ -1,28 +1,65 @@
 <?php
 declare(strict_types=1);
+
+require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/backend/bootstrap.php';
+
+use SAIPS\Services\AIService;
+use SAIPS\Services\ExecutiveReportManager;
+
 $user = require_auth('admin');
 $db   = Database::getInstance();
 $csrf = csrf_token();
+$reportManager = new ExecutiveReportManager($db);
+
+$checks = get_compliance_checks();
+$passed = count(array_filter($checks, fn($c) => $c['status'] === 'pass'));
+$action = count(array_filter($checks, fn($c) => $c['status'] === 'action'));
+$fail   = count(array_filter($checks, fn($c) => $c['status'] === 'fail'));
+$rec    = count(array_filter($checks, fn($c) => $c['status'] === 'recommended'));
+$score  = count($checks) > 0 ? (int)round(($passed / count($checks)) * 100) : 0;
+
+$postureSnapshot = get_security_posture_snapshot();
+$execReportResult = null;
+$execReportWarning = null;
+$execReportError = null;
+$generatedReport = null;
+$settingsMessage = null;
+$reportSettings = $reportManager->getSettings();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf($_POST['csrf_token'] ?? '')) {
+        $execReportError = 'Security validation failed. Please refresh and try again.';
+    } elseif (($_POST['action'] ?? '') === 'generate_exec_report') {
+        $aiService = new AIService();
+        $execReportResult = $aiService->generateExecutivePostureReport($postureSnapshot);
+        $execReportWarning = $execReportResult['warning'] ?? null;
+        $generatedReport = $execReportResult['report'] ?? null;
+        if (is_array($generatedReport)) {
+            $reportManager->saveGeneratedReport($generatedReport, $postureSnapshot, [
+                'generated_by' => $user['id'] ?? null,
+                'delivery_channel' => 'manual',
+                'report_format' => 'onscreen',
+                'provider' => $execReportResult['provider'] ?? 'report',
+                'model' => $execReportResult['model'] ?? null,
+            ]);
+        }
+    } elseif (($_POST['action'] ?? '') === 'save_exec_report_settings') {
+        $reportManager->saveSettings([
+            'email_enabled' => isset($_POST['email_enabled']),
+            'cadence' => $_POST['cadence'] ?? 'weekly',
+            'attach_format' => $_POST['attach_format'] ?? 'none',
+        ], $user['id'] ?? null);
+        $reportSettings = $reportManager->getSettings();
+        $settingsMessage = 'Executive report delivery settings updated.';
+    }
+}
+
+$reportHistory = $reportManager->getHistory(8);
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>Compliance Checklist | Ownuh SAIPS</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shortcut icon" href="assets/images/Favicon.png">
-    <script>const AUTH_LAYOUT = false;</script>
-    <script src="assets/js/layout/layout-default.js"></script>
-    <script src="assets/js/layout/layout.js"></script>
-    <link href="assets/libs/simplebar/simplebar.min.css" rel="stylesheet">
-    <link href="assets/css/icons.min.css" rel="stylesheet">
-    <link href="assets/libs/sweetalert2/sweetalert2.min.css" rel="stylesheet">
-    <link href="assets/css/bootstrap.min.css" id="bootstrap-style" rel="stylesheet">
-    <link href="assets/css/app.min.css" id="app-style" rel="stylesheet">
-    <link href="assets/css/custom.min.css" id="custom-style" rel="stylesheet">
-    
-</head>
+<?php $pageTitle = 'Compliance Checklist | Ownuh SAIPS'; $authLayout = false; include __DIR__ . '/backend/partials/page-head.php'; ?>
 <body>
 <?php include __DIR__ . '/backend/partials/header.php'; ?>
 <?php include __DIR__ . '/backend/partials/sidebar.php'; ?>
@@ -41,46 +78,241 @@ $csrf = csrf_token();
                 </div>
             </div>
 
-<?php
-// CAP512 Unit 7: Live DB checks for compliance
-$mfaCoverage  = (int)$db->fetchScalar('SELECT ROUND(SUM(mfa_enrolled)/COUNT(*)*100) FROM users WHERE deleted_at IS NULL');
-$hasPolicy    = (bool)$db->fetchScalar('SELECT COUNT(*) FROM rate_limit_config');
-$auditCount   = (int)$db->fetchScalar('SELECT COUNT(*) FROM audit_log');
-$openCritical = (int)$db->fetchScalar('SELECT COUNT(*) FROM incidents WHERE severity="sev1" AND status="open"');
-$blockedCount = (int)$db->fetchScalar('SELECT COUNT(*) FROM blocked_ips WHERE unblocked_at IS NULL');
-
-// CAP512 Unit 5: Array of compliance checks
-$checks = [
-    ['id'=>'C01', 'std'=>'NIST SP 800-63B', 'control'=>'Multi-factor authentication enforced',       'status'=> $mfaCoverage >= 100 ? 'pass' : ($mfaCoverage >= 80 ? 'action' : 'fail'), 'detail'=> $mfaCoverage.'% MFA coverage'],
-    ['id'=>'C02', 'std'=>'NIST SP 800-63B', 'control'=>'bcrypt password hashing (cost ≥ 12)',         'status'=>'pass', 'detail'=>'bcrypt cost 12 configured'],
-    ['id'=>'C03', 'std'=>'OWASP Top 10',    'control'=>'SQL injection prevention (prepared stmts)',   'status'=>'pass', 'detail'=>'All queries use mysqli prepared statements'],
-    ['id'=>'C04', 'std'=>'OWASP Top 10',    'control'=>'XSS prevention (output encoding)',            'status'=>'pass', 'detail'=>'htmlspecialchars() on all output'],
-    ['id'=>'C05', 'std'=>'OWASP Top 10',    'control'=>'CSRF protection on all POST forms',           'status'=>'pass', 'detail'=>'Cryptographic tokens per session'],
-    ['id'=>'C06', 'std'=>'ISO 27001',       'control'=>'Tamper-evident audit logging',                'status'=> $auditCount > 0 ? 'pass' : 'action', 'detail'=> $auditCount.' SHA-256 chained entries'],
-    ['id'=>'C07', 'std'=>'ISO 27001',       'control'=>'Account lockout policy (10 failures)',        'status'=>'pass', 'detail'=>'Soft-lock at 5, hard-lock at 10'],
-    ['id'=>'C08', 'std'=>'ISO 27001',       'control'=>'Rate limiting configured',                    'status'=> $hasPolicy ? 'pass' : 'action', 'detail'=> $hasPolicy ? 'Rate limits active' : 'No rate limit rules found'],
-    ['id'=>'C09', 'std'=>'GDPR Art. 32',    'control'=>'Data encrypted in transit (TLS 1.3)',         'status'=>'pass', 'detail'=>'Nginx TLS 1.3 only configuration'],
-    ['id'=>'C10', 'std'=>'GDPR Art. 32',    'control'=>'Database encryption at rest',                 'status'=>'recommended', 'detail'=>'InnoDB AES-256 — configure in DEPLOYMENT.md'],
-    ['id'=>'C11', 'std'=>'GDPR Art. 33',    'control'=>'72-hour breach notification workflow',        'status'=>'pass', 'detail'=>'GDPR flag in incident report form'],
-    ['id'=>'C12', 'std'=>'SOC 2 Type II',   'control'=>'Access control (RBAC 4-tier)',                'status'=>'pass', 'detail'=>'user / manager / admin / superadmin'],
-    ['id'=>'C13', 'std'=>'SOC 2 Type II',   'control'=>'No open SEV-1 incidents',                    'status'=> $openCritical === 0 ? 'pass' : 'fail', 'detail'=> $openCritical.' open critical incidents'],
-    ['id'=>'C14', 'std'=>'MITRE ATT&CK',   'control'=>'Brute-force detection and auto-block',        'status'=> $blockedCount > 0 || $hasPolicy ? 'pass' : 'recommended', 'detail'=>'IPS active: '.$blockedCount.' IPs blocked'],
-    ['id'=>'C15', 'std'=>'PCI DSS',         'control'=>'Password history enforcement (last 12)',      'status'=>'pass', 'detail'=>'password_history table enforces 12-entry history'],
-];
-
-// CAP512 Unit 5: array_filter + count
-$passed = count(array_filter($checks, fn($c) => $c['status'] === 'pass'));
-$action = count(array_filter($checks, fn($c) => $c['status'] === 'action'));
-$fail   = count(array_filter($checks, fn($c) => $c['status'] === 'fail'));
-$rec    = count(array_filter($checks, fn($c) => $c['status'] === 'recommended'));
-$score  = (int)round(($passed / count($checks)) * 100);
-?>
-
             <div class="row g-3 mb-4">
                 <div class="col-md-3"><div class="card text-center py-3 border-<?= $score >= 90 ? 'success' : 'warning' ?> border-2"><h2 class="fw-bold text-<?= $score >= 90 ? 'success' : 'warning' ?> mb-0"><?= $score ?>%</h2><p class="text-muted fs-12 mb-0">Compliance Score</p></div></div>
                 <div class="col-md-3"><div class="card text-center py-3"><h3 class="fw-bold text-success mb-0"><?= $passed ?></h3><p class="text-muted fs-12 mb-0">Passed</p></div></div>
-                <div class="col-md-3"><div class="card text-center py-3 <?= $action+$fail > 0 ? 'border-warning border-2' : '' ?>"><h3 class="fw-bold text-warning mb-0"><?= $action + $fail ?></h3><p class="text-muted fs-12 mb-0">Requires Action</p></div></div>
+                <div class="col-md-3"><div class="card text-center py-3 <?= $action + $fail > 0 ? 'border-warning border-2' : '' ?>"><h3 class="fw-bold text-warning mb-0"><?= $action + $fail ?></h3><p class="text-muted fs-12 mb-0">Requires Action</p></div></div>
                 <div class="col-md-3"><div class="card text-center py-3"><h3 class="fw-bold text-info mb-0"><?= $rec ?></h3><p class="text-muted fs-12 mb-0">Recommended</p></div></div>
+            </div>
+
+            <div class="card mb-4 border-primary border-opacity-25">
+                <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div>
+                        <h5 class="card-title mb-1">AI Executive Report</h5>
+                        <p class="text-muted fs-12 mb-0">Generate a leadership-ready summary of organisation posture from live SAIPS metrics.</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <form method="POST" class="d-flex align-items-center gap-2">
+                        <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                        <input type="hidden" name="action" value="generate_exec_report">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="ri-ai-generate me-1"></i>Generate Executive Report
+                        </button>
+                    </form>
+                        <a href="executive-report-export.php?format=html" class="btn btn-outline-secondary btn-sm">
+                            <i class="ri-file-code-line me-1"></i>Export HTML
+                        </a>
+                        <a href="executive-report-export.php?format=pdf" class="btn btn-outline-secondary btn-sm">
+                            <i class="ri-file-pdf-line me-1"></i>Export PDF
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3"><div class="rounded-3 bg-light p-3 h-100"><div class="fs-12 text-muted mb-1">Security Score</div><div class="fw-semibold fs-4"><?= esc((string)$postureSnapshot['security_score']) ?></div></div></div>
+                        <div class="col-md-3"><div class="rounded-3 bg-light p-3 h-100"><div class="fs-12 text-muted mb-1">MFA Coverage</div><div class="fw-semibold fs-4"><?= esc((string)$postureSnapshot['users']['mfa_coverage']) ?>%</div></div></div>
+                        <div class="col-md-3"><div class="rounded-3 bg-light p-3 h-100"><div class="fs-12 text-muted mb-1">Open Incidents</div><div class="fw-semibold fs-4"><?= esc((string)$postureSnapshot['incidents']['open_total']) ?></div></div></div>
+                        <div class="col-md-3"><div class="rounded-3 bg-light p-3 h-100"><div class="fs-12 text-muted mb-1">High-Risk Events (24h)</div><div class="fw-semibold fs-4"><?= esc((string)$postureSnapshot['auth']['high_risk_events_24h']) ?></div></div></div>
+                    </div>
+
+                    <?php if ($execReportError): ?>
+                        <div class="alert alert-danger mb-0"><?= esc($execReportError) ?></div>
+                    <?php elseif ($generatedReport): ?>
+                        <?php if ($execReportWarning): ?>
+                            <div class="alert alert-warning"><?= esc($execReportWarning) ?></div>
+                        <?php endif; ?>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                            <span class="badge bg-primary-subtle text-primary border border-primary">
+                                <?= esc(ucfirst((string)($execReportResult['provider'] ?? 'report'))) ?>
+                            </span>
+                            <?php if (!empty($execReportResult['model'])): ?>
+                                <span class="badge bg-light text-dark border"><?= esc((string)$execReportResult['model']) ?></span>
+                            <?php endif; ?>
+                            <span class="text-muted fs-12">Generated from live posture data at <?= esc(date('Y-m-d H:i')) ?></span>
+                        </div>
+
+                        <div class="rounded-3 border p-4">
+                            <div class="mb-4">
+                                <h4 class="fw-semibold mb-1"><?= esc((string)($generatedReport['report_title'] ?? 'Executive Security Posture Report')) ?></h4>
+                                <div class="text-muted fs-12">Overall posture: <?= esc((string)($generatedReport['overall_posture'] ?? 'N/A')) ?></div>
+                            </div>
+
+                            <div class="mb-4">
+                                <h6 class="fw-semibold">Executive Summary</h6>
+                                <p class="text-muted mb-0"><?= esc((string)($generatedReport['executive_summary'] ?? '')) ?></p>
+                            </div>
+
+                            <div class="row g-4">
+                                <div class="col-lg-6">
+                                    <h6 class="fw-semibold">Board Takeaways</h6>
+                                    <ul class="mb-0">
+                                        <?php foreach (($generatedReport['board_takeaways'] ?? []) as $item): ?>
+                                            <li class="mb-2 text-muted"><?= esc((string)$item) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                                <div class="col-lg-6">
+                                    <h6 class="fw-semibold">Strengths</h6>
+                                    <ul class="mb-0">
+                                        <?php foreach (($generatedReport['strengths'] ?? []) as $item): ?>
+                                            <li class="mb-2 text-muted"><?= esc((string)$item) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <h6 class="fw-semibold">Priority Risks</h6>
+                                <div class="row g-3">
+                                    <?php foreach (($generatedReport['priority_risks'] ?? []) as $risk): ?>
+                                        <div class="col-md-6">
+                                            <div class="border rounded-3 p-3 h-100">
+                                                <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                                    <div class="fw-semibold"><?= esc((string)($risk['title'] ?? 'Risk')) ?></div>
+                                                    <span class="badge bg-warning-subtle text-warning border border-warning"><?= esc((string)($risk['priority'] ?? 'medium')) ?></span>
+                                                </div>
+                                                <p class="text-muted fs-13 mb-2"><?= esc((string)($risk['impact'] ?? '')) ?></p>
+                                                <div class="fs-13"><span class="fw-semibold">Recommendation:</span> <?= esc((string)($risk['recommendation'] ?? '')) ?></div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+
+                            <div class="row g-4 mt-1">
+                                <div class="col-lg-5">
+                                    <h6 class="fw-semibold">Key Metrics</h6>
+                                    <div class="list-group list-group-flush">
+                                        <?php foreach (($generatedReport['key_metrics'] ?? []) as $metric): ?>
+                                            <div class="list-group-item px-0 d-flex align-items-center justify-content-between">
+                                                <span class="text-muted"><?= esc((string)($metric['label'] ?? 'Metric')) ?></span>
+                                                <span class="fw-semibold"><?= esc((string)($metric['value'] ?? '')) ?></span>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <div class="col-lg-7">
+                                    <h6 class="fw-semibold">Next 30 Days</h6>
+                                    <ul class="mb-3">
+                                        <?php foreach (($generatedReport['next_30_days'] ?? []) as $item): ?>
+                                            <li class="mb-2 text-muted"><?= esc((string)$item) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                    <h6 class="fw-semibold">Compliance Outlook</h6>
+                                    <p class="text-muted mb-0"><?= esc((string)($generatedReport['compliance_outlook'] ?? '')) ?></p>
+                                </div>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-muted fs-13">
+                            This report uses live compliance, incident, IPS, audit, and authentication posture to produce a board-style summary. If <code>OPENAI_API_KEY</code> is not configured, the app falls back to a deterministic local summary so the workflow still works.
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-lg-5">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Executive Report Delivery</h5>
+                        </div>
+                        <div class="card-body">
+                            <?php if ($settingsMessage): ?>
+                                <div class="alert alert-success"><?= esc($settingsMessage) ?></div>
+                            <?php endif; ?>
+                            <form method="POST" class="row g-3">
+                                <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                                <input type="hidden" name="action" value="save_exec_report_settings">
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="email_enabled" name="email_enabled" <?= !empty($reportSettings['email_enabled']) ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="email_enabled">Email scheduled executive reports to admins</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Cadence</label>
+                                    <select class="form-select" name="cadence">
+                                        <option value="weekly" <?= ($reportSettings['cadence'] ?? 'weekly') === 'weekly' ? 'selected' : '' ?>>Weekly</option>
+                                        <option value="monthly" <?= ($reportSettings['cadence'] ?? '') === 'monthly' ? 'selected' : '' ?>>Monthly</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Attachment Format</label>
+                                    <select class="form-select" name="attach_format">
+                                        <option value="none" <?= ($reportSettings['attach_format'] ?? 'none') === 'none' ? 'selected' : '' ?>>No attachment</option>
+                                        <option value="html" <?= ($reportSettings['attach_format'] ?? '') === 'html' ? 'selected' : '' ?>>Attach HTML</option>
+                                        <option value="pdf" <?= ($reportSettings['attach_format'] ?? '') === 'pdf' ? 'selected' : '' ?>>Attach PDF</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <div class="fs-12 text-muted">
+                                        The scheduler reads these settings when <code>backend/scripts/send-weekly-executive-report.php</code> runs.
+                                        <?php if (!empty($reportSettings['last_sent_at'])): ?>
+                                            Last scheduled send: <?= esc((string)$reportSettings['last_sent_at']) ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                                        <i class="ri-save-line me-1"></i>Save Delivery Settings
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-7">
+                    <div class="card h-100">
+                        <div class="card-header d-flex align-items-center justify-content-between">
+                            <h5 class="card-title mb-0">Executive Report History</h5>
+                            <span class="text-muted fs-12">Latest <?= count($reportHistory) ?> entries</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Generated</th>
+                                            <th>Channel</th>
+                                            <th>Format</th>
+                                            <th>Provider</th>
+                                            <th>By</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php if ($reportHistory === []): ?>
+                                        <tr><td colspan="5" class="text-muted text-center py-4">No saved executive reports yet.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($reportHistory as $entry): ?>
+                                            <tr>
+                                                <td>
+                                                    <div class="fw-semibold fs-13"><?= esc((string)($entry['report_title'] ?? 'Executive Security Posture Report')) ?></div>
+                                                    <div class="text-muted fs-12"><?= esc((string)($entry['generated_at'] ?? '')) ?></div>
+                                                </td>
+                                                <td><span class="badge bg-light text-dark border"><?= esc((string)($entry['delivery_channel'] ?? 'manual')) ?></span></td>
+                                                <td><span class="badge bg-light text-dark border"><?= esc((string)($entry['report_format'] ?? 'onscreen')) ?></span></td>
+                                                <td>
+                                                    <div class="fs-13"><?= esc((string)($entry['provider'] ?? 'report')) ?></div>
+                                                    <?php if (!empty($entry['model'])): ?>
+                                                        <div class="text-muted fs-12"><?= esc((string)$entry['model']) ?></div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <div class="fs-13"><?= esc((string)($entry['display_name'] ?? $entry['email'] ?? 'System')) ?></div>
+                                                    <?php if (!empty($entry['email_recipients'])): ?>
+                                                        <div class="text-muted fs-12"><?= esc((string)$entry['email_recipients']) ?></div>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="card">
@@ -122,16 +354,6 @@ $score  = (int)round(($passed / count($checks)) * 100);
         </div>
     </main>
 
-    <script src="assets/js/sidebar.js"></script>
-    <script src="assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/libs/simplebar/simplebar.min.js"></script>
-    <script src="assets/libs/sweetalert2/sweetalert2.min.js"></script>
-    <script src="assets/js/pages/scroll-top.init.js"></script>
-    <script src="assets/js/app.js" type="module"></script>
-    <script>
-    document.querySelectorAll('[data-bs-toggle="tooltip"],[title]').forEach(el => {
-        try { new bootstrap.Tooltip(el, {trigger:'hover'}); } catch(e){}
-    });
-    </script>
+    <?php include __DIR__ . '/backend/partials/footer-scripts.php'; ?>
 </body>
 </html>

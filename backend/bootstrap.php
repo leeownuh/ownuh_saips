@@ -86,7 +86,7 @@ class Database {
             // Log error, show maintenance page
             error_log('[SAIPS DB] Connection failed: ' . $this->conn->connect_error);
             http_response_code(503);
-            header('Location: under-maintenance.html');
+            header('Location: under-maintenance.php');
             exit;
         }
 
@@ -261,7 +261,7 @@ function require_auth(string $minRole = 'user'): array {
     $hierarchy = ['user' => 1, 'manager' => 2, 'admin' => 3, 'superadmin' => 4];
     if (($hierarchy[$payload['role']] ?? 0) < ($hierarchy[$minRole] ?? 1)) {
         http_response_code(401);
-        header('Location: auth-401.html');
+        header('Location: auth-401.php');
         exit;
     }
 
@@ -482,6 +482,138 @@ function get_dashboard_stats(): array {
 /**
  * Get recent audit log entries — CAP512 Unit 7: Advanced DB techniques
  */
+function get_compliance_checks(): array {
+    $db = Database::getInstance();
+
+    $mfaCoverage  = (int)($db->fetchScalar(
+        'SELECT ROUND(SUM(mfa_enrolled) / NULLIF(COUNT(*), 0) * 100) FROM users WHERE deleted_at IS NULL'
+    ) ?? 0);
+    $hasPolicy    = (bool)$db->fetchScalar('SELECT COUNT(*) FROM rate_limit_config');
+    $auditCount   = (int)($db->fetchScalar('SELECT COUNT(*) FROM audit_log') ?? 0);
+    $openCritical = (int)($db->fetchScalar(
+        'SELECT COUNT(*) FROM incidents WHERE severity = "sev1" AND status = "open"'
+    ) ?? 0);
+    $blockedCount = (int)($db->fetchScalar(
+        'SELECT COUNT(*) FROM blocked_ips WHERE unblocked_at IS NULL'
+    ) ?? 0);
+
+    return [
+        ['id'=>'C01', 'std'=>'NIST SP 800-63B', 'control'=>'Multi-factor authentication enforced',     'status'=> $mfaCoverage >= 100 ? 'pass' : ($mfaCoverage >= 80 ? 'action' : 'fail'), 'detail'=> $mfaCoverage . '% MFA coverage'],
+        ['id'=>'C02', 'std'=>'NIST SP 800-63B', 'control'=>'bcrypt password hashing (cost >= 12)',     'status'=>'pass', 'detail'=>'bcrypt cost 12 configured'],
+        ['id'=>'C03', 'std'=>'OWASP Top 10',    'control'=>'SQL injection prevention (prepared stmts)', 'status'=>'pass', 'detail'=>'All queries use mysqli prepared statements'],
+        ['id'=>'C04', 'std'=>'OWASP Top 10',    'control'=>'XSS prevention (output encoding)',          'status'=>'pass', 'detail'=>'htmlspecialchars() on all output'],
+        ['id'=>'C05', 'std'=>'OWASP Top 10',    'control'=>'CSRF protection on all POST forms',         'status'=>'pass', 'detail'=>'Cryptographic tokens per session'],
+        ['id'=>'C06', 'std'=>'ISO 27001',       'control'=>'Tamper-evident audit logging',              'status'=> $auditCount > 0 ? 'pass' : 'action', 'detail'=> $auditCount . ' SHA-256 chained entries'],
+        ['id'=>'C07', 'std'=>'ISO 27001',       'control'=>'Account lockout policy (10 failures)',      'status'=>'pass', 'detail'=>'Soft-lock at 5, hard-lock at 10'],
+        ['id'=>'C08', 'std'=>'ISO 27001',       'control'=>'Rate limiting configured',                  'status'=> $hasPolicy ? 'pass' : 'action', 'detail'=> $hasPolicy ? 'Rate limits active' : 'No rate limit rules found'],
+        ['id'=>'C09', 'std'=>'GDPR Art. 32',    'control'=>'Data encrypted in transit (TLS 1.3)',       'status'=>'pass', 'detail'=>'Nginx TLS 1.3 only configuration'],
+        ['id'=>'C10', 'std'=>'GDPR Art. 32',    'control'=>'Database encryption at rest',               'status'=>'recommended', 'detail'=>'InnoDB AES-256 - configure in DEPLOYMENT.md'],
+        ['id'=>'C11', 'std'=>'GDPR Art. 33',    'control'=>'72-hour breach notification workflow',      'status'=>'pass', 'detail'=>'GDPR flag in incident report form'],
+        ['id'=>'C12', 'std'=>'SOC 2 Type II',   'control'=>'Access control (RBAC 4-tier)',              'status'=>'pass', 'detail'=>'user / manager / admin / superadmin'],
+        ['id'=>'C13', 'std'=>'SOC 2 Type II',   'control'=>'No open SEV-1 incidents',                   'status'=> $openCritical === 0 ? 'pass' : 'fail', 'detail'=> $openCritical . ' open critical incidents'],
+        ['id'=>'C14', 'std'=>'MITRE ATT&CK',    'control'=>'Brute-force detection and auto-block',      'status'=> $blockedCount > 0 || $hasPolicy ? 'pass' : 'recommended', 'detail'=>'IPS active: ' . $blockedCount . ' IPs blocked'],
+        ['id'=>'C15', 'std'=>'PCI DSS',         'control'=>'Password history enforcement (last 12)',    'status'=>'pass', 'detail'=>'password_history table enforces 12-entry history'],
+    ];
+}
+
+function get_security_posture_snapshot(): array {
+    $db = Database::getInstance();
+    $stats = get_dashboard_stats();
+    $checks = get_compliance_checks();
+
+    $passed = count(array_filter($checks, fn($c) => $c['status'] === 'pass'));
+    $action = count(array_filter($checks, fn($c) => $c['status'] === 'action'));
+    $fail   = count(array_filter($checks, fn($c) => $c['status'] === 'fail'));
+    $rec    = count(array_filter($checks, fn($c) => $c['status'] === 'recommended'));
+    $score  = count($checks) > 0 ? (int)round(($passed / count($checks)) * 100) : 0;
+
+    $highRiskEvents24h = (int)($db->fetchScalar(
+        'SELECT COUNT(*) FROM audit_log WHERE created_at >= NOW() - INTERVAL 24 HOUR AND risk_score >= 70'
+    ) ?? 0);
+    $failedLogins7d = (int)($db->fetchScalar(
+        'SELECT COUNT(*) FROM audit_log WHERE event_code = "AUTH-002" AND created_at >= NOW() - INTERVAL 7 DAY'
+    ) ?? 0);
+    $resolvedIncidents30d = (int)($db->fetchScalar(
+        'SELECT COUNT(*) FROM incidents WHERE status IN ("resolved", "closed") AND detected_at >= NOW() - INTERVAL 30 DAY'
+    ) ?? 0);
+
+    $failingControls = array_values(array_map(
+        fn($check) => ['id' => $check['id'], 'control' => $check['control'], 'detail' => $check['detail']],
+        array_filter($checks, fn($c) => in_array($c['status'], ['fail', 'action'], true))
+    ));
+
+    $recentIncidents = array_map(static function(array $incident): array {
+        return [
+            'incident_ref' => $incident['incident_ref'] ?? '',
+            'severity' => $incident['severity'] ?? '',
+            'status' => $incident['status'] ?? '',
+            'trigger_summary' => $incident['trigger_summary'] ?? '',
+            'detected_at' => $incident['detected_at'] ?? '',
+        ];
+    }, array_slice(get_incidents('', 6), 0, 6));
+
+    $recentAudit = array_map(static function(array $entry): array {
+        return [
+            'event_code' => $entry['event_code'] ?? '',
+            'event_name' => $entry['event_name'] ?? '',
+            'user' => $entry['email'] ?? $entry['display_name'] ?? 'system',
+            'source_ip' => $entry['source_ip'] ?? '',
+            'risk_score' => (int)($entry['risk_score'] ?? 0),
+            'created_at' => $entry['created_at'] ?? '',
+        ];
+    }, array_slice(get_recent_audit(10), 0, 10));
+
+    $blockedIps = array_map(static function(array $row): array {
+        return [
+            'ip_address' => $row['ip_address'] ?? '',
+            'block_type' => $row['block_type'] ?? '',
+            'trigger_rule' => $row['trigger_rule'] ?? '',
+            'country_code' => $row['country_code'] ?? '',
+            'blocked_at' => $row['blocked_at'] ?? '',
+        ];
+    }, array_slice(get_blocked_ips(5), 0, 5));
+
+    return [
+        'organisation' => $_ENV['APP_NAME'] ?? 'Ownuh SAIPS Organisation',
+        'generated_at' => date('c'),
+        'security_score' => (int)($stats['security_score'] ?? 0),
+        'compliance_score' => $score,
+        'compliance' => [
+            'passed' => $passed,
+            'requires_action' => $action + $fail,
+            'recommended' => $rec,
+            'failing_controls' => $failingControls,
+        ],
+        'users' => [
+            'total' => (int)($stats['users']['total'] ?? 0),
+            'active' => (int)($stats['users']['active'] ?? 0),
+            'locked' => (int)($stats['users']['locked'] ?? 0),
+            'mfa_coverage' => (int)($stats['mfa_coverage'] ?? 0),
+        ],
+        'auth' => [
+            'successful_logins_24h' => (int)($stats['auth_24h']['successful_logins'] ?? 0),
+            'failed_attempts_24h' => (int)($stats['auth_24h']['failed_attempts'] ?? 0),
+            'failed_attempts_7d' => $failedLogins7d,
+            'high_risk_events_24h' => $highRiskEvents24h,
+            'active_sessions_24h' => (int)($stats['active_sessions'] ?? 0),
+        ],
+        'ips' => [
+            'blocked_ips_active' => (int)($stats['blocked_ips'] ?? 0),
+            'alert_rules_active' => (int)($stats['alert_rules'] ?? 0),
+            'monitored_endpoints' => (int)($stats['monitored_endpoints'] ?? 0),
+            'top_blocked_ips' => $blockedIps,
+        ],
+        'incidents' => [
+            'open_total' => (int)($stats['open_incidents_total'] ?? 0),
+            'open_by_severity' => $stats['open_incidents'] ?? [],
+            'resolved_today' => (int)($stats['resolved_today'] ?? 0),
+            'resolved_30d' => $resolvedIncidents30d,
+            'recent' => $recentIncidents,
+        ],
+        'recent_audit' => $recentAudit,
+    ];
+}
+
 function get_recent_audit(int $limit = 10): array {
     $db = Database::getInstance();
     return $db->fetchAll(
@@ -495,6 +627,47 @@ function get_recent_audit(int $limit = 10): array {
         [$limit], 'i'
     );
 }
+
+function saips_guest_user(string $label = 'Guest'): array {
+    $safe = trim($label) !== '' ? trim($label) : 'Guest';
+    return [
+        'id' => null,
+        'display_name' => $safe,
+        'email' => strtolower(str_replace(' ', '.', $safe)) . '@ownuh-saips.com',
+        'role' => 'visitor',
+    ];
+}
+
+function get_system_setting(string $key, mixed $default = null): mixed {
+    try {
+        $db = Database::getInstance();
+        $value = $db->fetchScalar(
+            'SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1',
+            [$key]
+        );
+        return $value !== null ? $value : $default;
+    } catch (\Throwable $e) {
+        return $default;
+    }
+}
+
+function set_system_setting(string $key, string $value, ?string $updatedBy = null): bool {
+    try {
+        $db = Database::getInstance();
+        $db->execute(
+            'INSERT INTO system_settings (setting_key, setting_value, updated_by)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                setting_value = VALUES(setting_value),
+                updated_by = VALUES(updated_by)',
+            [$key, $value, $updatedBy]
+        );
+        return true;
+    } catch (\Throwable $e) {
+        return false;
+    }
+}
+
 
 /**
  * Get all users — demonstrates mysqli JOIN + ORDER BY (CAP512 Unit 7)

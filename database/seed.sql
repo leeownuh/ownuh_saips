@@ -1,5 +1,5 @@
 -- ============================================================
--- Ownuh SAIPS — Development Seed Data
+-- Ownuh SAIPS â€” Development Seed Data
 -- DO NOT USE IN PRODUCTION
 -- ============================================================
 
@@ -7,11 +7,11 @@ USE ownuh_saips;
 
 -- Default admin user (password: Admin@SAIPS2025! - CHANGE IMMEDIATELY)
 INSERT IGNORE INTO users (id, display_name, email, role, status, mfa_enrolled, mfa_factor, email_verified, email_verified_at) VALUES
-('usr-001-0000-0000-0000-000000000001', 'Sophia Johnson',  'sophia.johnson@acme.com',  'superadmin', 'active',  1, 'fido2',     1, NOW()),
-('usr-002-0000-0000-0000-000000000002', 'Marcus Chen',     'marcus.chen@acme.com',     'admin',      'active',  1, 'totp',      1, NOW()),
-('usr-003-0000-0000-0000-000000000003', 'Priya Patel',     'priya.patel@acme.com',     'manager',    'locked',  1, 'totp',      1, NOW()),
-('usr-004-0000-0000-0000-000000000004', 'James Harris',    'james.harris@acme.com',    'user',       'active',  1, 'email_otp', 1, NOW()),
-('usr-005-0000-0000-0000-000000000005', 'Alex Rivera',     'alex.rivera@acme.com',     'user',       'pending', 0, 'none',      0, NULL);
+('usr-001-0000-0000-0000-000000000001', 'Sophia Johnson',  'sophia.johnson@ownuh-saips.com',  'superadmin', 'active',  1, 'fido2',     1, NOW()),
+('usr-002-0000-0000-0000-000000000002', 'Marcus Chen',     'marcus.chen@ownuh-saips.com',     'admin',      'active',  1, 'totp',      1, NOW()),
+('usr-003-0000-0000-0000-000000000003', 'Priya Patel',     'priya.patel@ownuh-saips.com',     'manager',    'locked',  1, 'totp',      1, NOW()),
+('usr-004-0000-0000-0000-000000000004', 'James Harris',    'james.harris@ownuh-saips.com',    'user',       'active',  1, 'email_otp', 1, NOW()),
+('usr-005-0000-0000-0000-000000000005', 'Alex Rivera',     'alex.rivera@ownuh-saips.com',     'user',       'pending', 0, 'none',      0, NULL);
 
 UPDATE users 
 SET failed_attempts = 10, last_failed_at = NOW() - INTERVAL 1 HOUR

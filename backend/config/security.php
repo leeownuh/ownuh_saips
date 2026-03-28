@@ -1,19 +1,19 @@
 <?php
 /**
- * Ownuh SAIPS — Security Configuration
- * Implements thresholds from SRS §2–3.
+ * Ownuh SAIPS â€” Security Configuration
+ * Implements thresholds from SRS Â§2â€“3.
  */
 
 return [
 
-    // ── Password Policy (SRS §2.2) ───────────────────────────────
+    // â”€â”€ Password Policy (SRS Â§2.2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     'password' => [
         'min_length'        => 12,
         'max_length'        => 128,
         'require_classes'   => 3,        // 3-of-4: upper, lower, digit, special
         'history_count'     => 12,       // block last N passwords
-        'expiry_standard'   => 180,      // days — standard accounts
-        'expiry_privileged' => 90,       // days — admin/superadmin
+        'expiry_standard'   => 180,      // days â€” standard accounts
+        'expiry_privileged' => 90,       // days â€” admin/superadmin
         'hibp_check'        => true,
         'similarity_check'  => true,     // Levenshtein vs email/username
         'similarity_min'    => 3,        // Levenshtein distance threshold
@@ -21,10 +21,10 @@ return [
         'bcrypt_upgrade_to' => 14,       // auto-upgrade on next login
     ],
 
-    // ── MFA Policy (SRS §2.4) ────────────────────────────────────
+    // â”€â”€ MFA Policy (SRS Â§2.4) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     'mfa' => [
         'required_roles'       => ['superadmin', 'admin'],
-        'totp_window'          => 1,     // ±1 step tolerance (RFC 6238)
+        'totp_window'          => 1,     // Â±1 step tolerance (RFC 6238)
         'totp_digits'          => 6,
         'totp_period'          => 30,    // seconds
         'email_otp_length'     => 6,
@@ -36,7 +36,7 @@ return [
         'fido2_required_roles' => ['superadmin', 'admin'],
     ],
 
-    // ── JWT Configuration (SRS §3.4) ─────────────────────────────
+    // â”€â”€ JWT Configuration (SRS Â§3.4) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     'jwt' => [
         'algorithm'          => 'RS256',
         'access_ttl'         => 900,     // 15 minutes
@@ -47,7 +47,7 @@ return [
         'public_key_path'    => $_ENV['JWT_PUBLIC_KEY_PATH']  ?? '/etc/saips/keys/public.pem',
     ],
 
-    // ── Session Policy (SRS §3.4) ────────────────────────────────
+    // â”€â”€ Session Policy (SRS Â§3.4) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     'session' => [
         'max_concurrent_standard' => 3,
         'max_concurrent_admin'    => 1,
@@ -55,7 +55,7 @@ return [
         'idle_timeout_admin'      => 900,   // 15 minutes
     ],
 
-    // ── Brute-Force Detection (SRS §3.1 & §3.2) ─────────────────
+    // â”€â”€ Brute-Force Detection (SRS Â§3.1 & Â§3.2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     'brute_force' => [
         'per_user' => [
             'failures'        => 5,
@@ -86,7 +86,7 @@ return [
         'captcha_after'       => 5,   // soft-lock threshold
     ],
 
-    // ── Rate Limits (SRS §3.3) ───────────────────────────────────
+    // â”€â”€ Rate Limits (SRS Â§3.3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     'rate_limits' => [
         '/auth/login'         => ['limit' => 60,  'window' => 60,   'scope' => 'per_ip'],
         '/auth/token'         => ['limit' => 60,  'window' => 60,   'scope' => 'per_ip'],
@@ -95,7 +95,7 @@ return [
         '/api/*'              => ['limit' => 300, 'window' => 60,   'scope' => 'per_token'],
     ],
 
-    // ── Threat Intelligence (SRS §3.3) ───────────────────────────
+    // â”€â”€ Threat Intelligence (SRS Â§3.3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     'threat_intel' => [
         'feeds' => [
             'abuseipdb'       => ['url' => 'https://api.abuseipdb.com/api/v2/check', 'api_key_env' => 'ABUSEIPDB_KEY'],
@@ -108,10 +108,10 @@ return [
         'vpn_log_only'        => true,  // VPNs logged but not blocked
     ],
 
-    // ── Alerts & Notifications (SRS §5.2) ───────────────────────
+    // â”€â”€ Alerts & Notifications (SRS Â§5.2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     'alerts' => [
-        'email_from'          => 'security@acme.com',
-        'admin_email'         => 'sophia.johnson@acme.com',
+        'email_from'          => 'security@ownuh-saips.com',
+        'admin_email'         => 'sophia.johnson@ownuh-saips.com',
         'webhook_url'         => $_ENV['ALERT_WEBHOOK_URL'] ?? null,
         'sms_enabled'         => false,
         'dispatch_within_seconds' => 60,
