@@ -49,7 +49,7 @@ $allowCount = count(array_filter($geoRules, fn($r) => $r['rule_type'] === 'allow
 $recentGeoBlocks = $db->fetchAll(
     'SELECT ip_address, country_code, blocked_at, trigger_rule
      FROM blocked_ips
-     WHERE block_type = "geo" AND unblocked_at IS NULL
+     WHERE block_type = "geo_block" AND unblocked_at IS NULL
      ORDER BY blocked_at DESC LIMIT 20'
 ) ?: [];
 ?>

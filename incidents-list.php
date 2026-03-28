@@ -115,7 +115,8 @@ $totalOpen = array_sum($sevMap);
                             <?php else: ?>
                             <?php foreach ($openInc as $inc):
                                 // CAP512 Unit 4: String + time functions
-                                $age = time() - strtotime($inc['detected_at']);
+                                $detectedTs = $inc['detected_at'] ? strtotime($inc['detected_at']) : time();
+                                $age = time() - $detectedTs;
                                 $ageStr = format_duration($age);
                                 $slaMins = ['sev1'=>60,'sev2'=>240,'sev3'=>1440,'sev4'=>4320];
                                 $slaMin  = $slaMins[$inc['severity']] ?? 1440;

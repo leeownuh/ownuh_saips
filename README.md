@@ -21,18 +21,44 @@ Ownuh SAIPS is a full-stack security administration platform built with PHP, MyS
 
 ### 1. Install
 
+Choose the setup path that matches your environment.
+
+#### Windows / XAMPP
+
+```powershell
+cd C:\xampp\htdocs\ownuh_saips_fixed
+Set-ExecutionPolicy -Scope Process Bypass
+.\setup_windows.ps1
+```
+
+Or:
+
+```bat
+cd C:\xampp\htdocs\ownuh_saips_fixed
+setup_windows.bat
+```
+
+The Windows setup script:
+- creates `ownuh_saips` and `ownuh_credentials`
+- imports schema and the recruiter-friendly `portfolio_seed.sql`
+- generates JWT keys in `keys/`
+- writes `backend/config/.env`
+- prints the live demo login and app URL
+
+#### Linux / macOS
+
 ```bash
 git clone https://github.com/YOUR_USERNAME/ownuh-saips.git
 cd ownuh-saips
 bash install.sh
 ```
 
-The installer:
+The Linux setup script:
 - creates `ownuh_saips` and `ownuh_credentials`
-- imports schema and seed data
+- imports schema and the recruiter-friendly `portfolio_seed.sql`
 - generates JWT keys in `keys/`
 - writes `backend/config/.env`
-- hashes the seed credentials
+- prints the live demo login and app URL
 
 ### 2. Start the app
 
@@ -60,11 +86,13 @@ http://localhost/ownuh_saips_fixed/login.php
 
 | Email | Password | Role |
 |---|---|---|
+| `lucia.alvarez@acme.com` | `Admin@SAIPS2025!` | Admin |
 | `sophia.johnson@acme.com` | `Admin@SAIPS2025!` | Super Admin |
 | `marcus.chen@acme.com` | `Admin@SAIPS2025!` | Admin |
-| `james.harris@acme.com` | `Admin@SAIPS2025!` | User |
 
 Change all seed passwords immediately after first login.
+
+The default scripted install now uses `database/portfolio_seed.sql` so the app comes up with fuller dashboard, IPS, incident, audit, and MFA demo data.
 
 ---
 
@@ -189,7 +217,12 @@ APP_TIMEZONE_LABEL=IST
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for:
 - GitHub push steps
+- Windows and Linux scripted setup options
 - ngrok exposure
 - Apache/Linux deployment
 - environment variables
 - security checklist
+
+Also see:
+- `ARCHITECTURE.md` for component boundaries and auth/MFA/reset design
+- `KNOWN_LIMITATIONS.md` for honest demo-vs-production tradeoffs

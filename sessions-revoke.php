@@ -1,86 +1,283 @@
 <?php
 declare(strict_types=1);
-/**
- * Ownuh SAIPS — Session Revocation (live from DB)
- * CAP512: PHP + MySQL, OOP, arrays, string functions, control flow
- */
-require_once __DIR__ . '/backend/bootstrap.php';
-$user = require_auth('admin');
-$db   = Database::getInstance();
-$csrf = csrf_token();
 
-// POST: revoke session(s)
+require_once __DIR__ . '/backend/bootstrap.php';
+session_start();
+
+use SAIPS\Middleware\AuditMiddleware;
+
+$authUser = require_auth('admin');
+$db       = Database::getInstance();
+$csrf     = csrf_token();
+
+AuditMiddleware::init(get_audit_pdo());
+
+$hierarchy = ['user' => 1, 'manager' => 2, 'admin' => 3, 'superadmin' => 4];
+$flash     = null;
+$flashType = 'success';
+
+function clear_current_auth_session(): void {
+    $trustedProxy = $_ENV['TRUSTED_PROXY'] ?? '';
+    $remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
+    $proxyTrusted = ($trustedProxy !== '')
+                 && ($trustedProxy === 'any' || $remoteAddr === $trustedProxy);
+
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+             || (($_SERVER['SERVER_PORT'] ?? 80) == 443)
+             || ($proxyTrusted && ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
+    $sameSite = $_ENV['COOKIE_SAMESITE'] ?? ($proxyTrusted ? 'Lax' : 'Strict');
+
+    setcookie('saips_access', '', [
+        'expires'  => time() - 3600,
+        'path'     => '/',
+        'secure'   => $isHttps,
+        'httponly' => true,
+        'samesite' => $sameSite,
+    ]);
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION = [];
+
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], (bool)$params['secure'], (bool)$params['httponly']);
+        }
+
+        session_destroy();
+    }
+}
+
+// Handle POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf($_POST['csrf_token'] ?? null)) {
-        http_response_code(403); die('CSRF token mismatch.');
-    }
-    $action    = $_POST['action']    ?? '';
-    $sessionId = $_POST['session_id'] ?? '';
-    $targetUid = $_POST['user_id']    ?? '';
-    $reason    = $_POST['reason']    ?? 'Admin revocation';
+        $flash = 'Invalid request.';
+        $flashType = 'danger';
+    } else {
+        $action = $_POST['action'] ?? '';
+        $reason = trim((string)($_POST['reason'] ?? 'Session revoked by administrator'));
+        $currentUserId = $authUser['sub'] ?? $authUser['id'] ?? null;
 
-    if ($action === 'revoke_one' && $sessionId) {
-        // CAP512 Unit 7: parameterised UPDATE
-        $db->execute(
-            'UPDATE sessions SET invalidated_at = NOW(), invalidated_by = ?,
-             invalidation_reason = ? WHERE id = ?',
-            [$user['id'], $reason, $sessionId]
-        );
-    } elseif ($action === 'revoke_user' && $targetUid) {
-        $db->execute(
-            'UPDATE sessions SET invalidated_at = NOW(), invalidated_by = ?,
-             invalidation_reason = ?
-             WHERE user_id = ? AND invalidated_at IS NULL AND expires_at > NOW()',
-            [$user['id'], $reason, $targetUid]
-        );
-    } elseif ($action === 'revoke_all') {
-        // Superadmin only
-        if ($user['role'] === 'superadmin') {
-            $db->execute(
-                'UPDATE sessions SET invalidated_at = NOW(), invalidated_by = ?,
-                 invalidation_reason = ?
-                 WHERE user_id != ? AND invalidated_at IS NULL AND expires_at > NOW()',
-                [$user['id'], 'Mass revocation by superadmin', $user['id']]
-            );
+        try {
+            if ($action === 'revoke_user') {
+                $targetUserId = trim((string)($_POST['user_id'] ?? ''));
+
+                if ($targetUserId === '') {
+                    throw new RuntimeException('Please select a user.');
+                }
+
+                $targetUser = $db->fetchOne(
+                    'SELECT id, email, display_name, role
+                     FROM users
+                     WHERE id = ? AND deleted_at IS NULL',
+                    [$targetUserId]
+                );
+
+                if (!$targetUser) {
+                    throw new RuntimeException('User not found.');
+                }
+
+                if (
+                    ($hierarchy[$targetUser['role']] ?? 0) >= ($hierarchy[$authUser['role']] ?? 0)
+                    && ($authUser['role'] ?? '') !== 'superadmin'
+                ) {
+                    throw new RuntimeException('You cannot revoke sessions for a user with equal or higher privileges.');
+                }
+
+                $sessions = $db->fetchAll(
+                    'SELECT id, refresh_token_hash
+                     FROM sessions
+                     WHERE user_id = ? AND invalidated_at IS NULL',
+                    [$targetUserId]
+                );
+
+                foreach ($sessions as $s) {
+                    try {
+                        $redis = new Redis();
+                        $redis->connect('127.0.0.1', 6379);
+                        $redis->del('saips:session:' . $s['refresh_token_hash']);
+                    } catch (Throwable $e) {
+                        error_log('[SAIPS] Redis revoke failed: ' . $e->getMessage());
+                    }
+                }
+
+                $count = $db->execute(
+                    'UPDATE sessions
+                     SET invalidated_at = NOW(),
+                         invalidated_by = ?,
+                         invalidation_reason = ?
+                     WHERE user_id = ? AND invalidated_at IS NULL',
+                    [$currentUserId, $reason, $targetUserId]
+                );
+
+                AuditMiddleware::log(
+                    'SES-003',
+                    'All Sessions Revoked',
+                    $currentUserId,
+                    $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0',
+                    null,
+                    json_encode([
+                        'target_user_id' => $targetUserId,
+                        'target_email'   => $targetUser['email'],
+                        'revoked_count'  => $count,
+                        'reason'         => $reason,
+                    ], JSON_UNESCAPED_SLASHES)
+                );
+
+                // If revoking your own sessions, log out immediately
+                if ($targetUserId === $currentUserId) {
+                    clear_current_auth_session();
+                    header('Location: login.php?revoked=1');
+                    exit;
+                }
+
+                $flash = $count > 0
+                    ? "Revoked {$count} active session(s) for {$targetUser['display_name']}."
+                    : 'No active sessions found for that user.';
+            }
+
+            elseif ($action === 'revoke_session') {
+                $sessionId = trim((string)($_POST['session_id'] ?? ''));
+
+                if ($sessionId === '') {
+                    throw new RuntimeException('Please enter a session ID.');
+                }
+
+                $session = $db->fetchOne(
+                    'SELECT s.id, s.user_id, s.refresh_token_hash, u.role, u.display_name, u.email
+                     FROM sessions s
+                     JOIN users u ON u.id = s.user_id
+                     WHERE s.id = ? AND s.invalidated_at IS NULL',
+                    [$sessionId]
+                );
+
+                if (!$session) {
+                    throw new RuntimeException('Session not found or already revoked.');
+                }
+
+                if (
+                    ($hierarchy[$session['role']] ?? 0) >= ($hierarchy[$authUser['role']] ?? 0)
+                    && ($authUser['role'] ?? '') !== 'superadmin'
+                ) {
+                    throw new RuntimeException('You cannot revoke a session for a user with equal or higher privileges.');
+                }
+
+                try {
+                    $redis = new Redis();
+                    $redis->connect('127.0.0.1', 6379);
+                    $redis->del('saips:session:' . $session['refresh_token_hash']);
+                } catch (Throwable $e) {
+                    error_log('[SAIPS] Redis revoke failed: ' . $e->getMessage());
+                }
+
+                $db->execute(
+                    'UPDATE sessions
+                     SET invalidated_at = NOW(),
+                         invalidated_by = ?,
+                         invalidation_reason = ?
+                     WHERE id = ? AND invalidated_at IS NULL',
+                    [$currentUserId, $reason, $sessionId]
+                );
+
+                AuditMiddleware::log(
+                    'SES-002',
+                    'Session Revoked',
+                    $currentUserId,
+                    $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0',
+                    null,
+                    json_encode([
+                        'session_id'      => $sessionId,
+                        'target_user_id'  => $session['user_id'],
+                        'target_email'    => $session['email'],
+                        'reason'          => $reason,
+                    ], JSON_UNESCAPED_SLASHES)
+                );
+
+                // If revoking one of your own sessions, log out immediately
+                if ($session['user_id'] === $currentUserId) {
+                    clear_current_auth_session();
+                    header('Location: login.php?revoked=1');
+                    exit;
+                }
+
+                $flash = "Session {$sessionId} revoked successfully.";
+            }
+
+            elseif ($action === 'revoke_all_system') {
+                if (($authUser['role'] ?? '') !== 'superadmin') {
+                    throw new RuntimeException('Only a superadmin can revoke all system sessions.');
+                }
+
+                $confirm = trim((string)($_POST['confirm_text'] ?? ''));
+                if ($confirm !== 'CONFIRM REVOKE ALL') {
+                    throw new RuntimeException('Confirmation text does not match.');
+                }
+
+                $sessions = $db->fetchAll(
+                    'SELECT refresh_token_hash
+                     FROM sessions
+                     WHERE invalidated_at IS NULL'
+                );
+
+                foreach ($sessions as $s) {
+                    try {
+                        $redis = new Redis();
+                        $redis->connect('127.0.0.1', 6379);
+                        $redis->del('saips:session:' . $s['refresh_token_hash']);
+                    } catch (Throwable $e) {
+                        error_log('[SAIPS] Redis revoke failed: ' . $e->getMessage());
+                    }
+                }
+
+                $count = $db->execute(
+                    'UPDATE sessions
+                     SET invalidated_at = NOW(),
+                         invalidated_by = ?,
+                         invalidation_reason = ?
+                     WHERE invalidated_at IS NULL',
+                    [$currentUserId, 'SYSTEM-WIDE: ' . $reason]
+                );
+
+                AuditMiddleware::log(
+                    'SES-004',
+                    'All System Sessions Revoked',
+                    $currentUserId,
+                    $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0',
+                    null,
+                    json_encode([
+                        'revoked_count' => $count,
+                        'reason'        => $reason,
+                    ], JSON_UNESCAPED_SLASHES)
+                );
+
+                // System-wide revoke should also kick out the current superadmin
+                clear_current_auth_session();
+                header('Location: login.php?revoked=1');
+                exit;
+            }
+
+            else {
+                throw new RuntimeException('Invalid action.');
+            }
+        } catch (Throwable $e) {
+            $flash = $e->getMessage();
+            $flashType = 'danger';
         }
     }
-    header('Location: sessions-revoke.php?done=1');
-    exit;
 }
 
-// CAP512 Unit 7: load data
-$sessions = get_active_sessions(200);
-
-// CAP512 Unit 5: array_filter + grouping
-$adminSessions = array_filter($sessions, fn($s) => in_array($s['role'], ['admin','superadmin']));
-$userSessions  = array_filter($sessions, fn($s) => !in_array($s['role'], ['admin','superadmin']));
-
-// Users with multiple sessions
-$sessionCounts = [];
-foreach ($sessions as $s) {
-    $sessionCounts[$s['user_id']] = ($sessionCounts[$s['user_id']] ?? 0) + 1;
-}
-arsort($sessionCounts);
-$multiSessionUsers = array_filter($sessionCounts, fn($c) => $c > 1);
-
-// Recently revoked
-$recentRevoked = $db->fetchAll(
-    'SELECT s.id, u.display_name, u.email, s.ip_address, s.invalidated_at,
-            s.invalidation_reason, a.display_name as revoked_by_name
-     FROM sessions s
-     JOIN users u ON u.id = s.user_id
-     LEFT JOIN users a ON a.id = s.invalidated_by
-     WHERE s.invalidated_at IS NOT NULL
-     ORDER BY s.invalidated_at DESC LIMIT 20'
+$users = $db->fetchAll(
+    'SELECT id, email, display_name, role, status
+     FROM users
+     WHERE deleted_at IS NULL
+     ORDER BY FIELD(role,"superadmin","admin","manager","user"), display_name'
 );
-
-$done = isset($_GET['done']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Session Revocation | Ownuh SAIPS</title>
+    <title>Revoke Sessions | Ownuh SAIPS</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="shortcut icon" href="assets/images/Favicon.png">
     <script>const AUTH_LAYOUT = false;</script>
@@ -100,166 +297,140 @@ $done = isset($_GET['done']);
 
 <main class="app-wrapper">
     <div class="app-container">
+
         <div class="hstack flex-wrap gap-3 mb-5">
             <div class="flex-grow-1">
-                <h4 class="mb-1 fw-semibold"><i class="ri-logout-box-r-line me-2 text-danger"></i>Session Revocation</h4>
-                <nav><ol class="breadcrumb breadcrumb-arrow mb-0">
-                    <li class="breadcrumb-item"><a href="dashboard.php">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="sessions-active.php">Sessions</a></li>
-                    <li class="breadcrumb-item active">Revoke</li>
-                </ol></nav>
+                <h4 class="mb-1 fw-semibold">
+                    <i class="ri-logout-circle-line me-2 text-danger"></i>Revoke Sessions
+                </h4>
+                <nav>
+                    <ol class="breadcrumb breadcrumb-arrow mb-0">
+                        <li class="breadcrumb-item"><a href="dashboard.php">Security Dashboard</a></li>
+                        <li class="breadcrumb-item active">Revoke Sessions</li>
+                    </ol>
+                </nav>
             </div>
-            <?php if ($user['role'] === 'superadmin'): ?>
-            <form method="POST" onsubmit="return confirm('Revoke ALL active sessions (except yours)? This will force re-login for all users.')">
-                <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
-                <input type="hidden" name="action" value="revoke_all">
-                <button type="submit" class="btn btn-danger">
-                    <i class="ri-shield-keyhole-line me-1"></i>Revoke All Sessions
-                </button>
-            </form>
-            <?php endif; ?>
         </div>
 
-        <?php if ($done): ?>
-        <div class="alert alert-success alert-dismissible fade show">
-            <i class="ri-checkbox-circle-line me-2"></i>Session(s) revoked successfully.
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
+        <?php if ($flash): ?>
+            <div class="alert alert-<?= esc($flashType) ?> mb-4">
+                <?= esc($flash) ?>
+            </div>
         <?php endif; ?>
 
-        <!-- Stats -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-3">
-                <div class="card border-0 shadow-sm text-center p-3">
-                    <div class="fs-2 fw-bold text-primary"><?= count($sessions) ?></div>
-                    <div class="text-muted small">Active Sessions</div>
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0 text-danger">
+                            <i class="ri-user-unfollow-line me-2"></i>Revoke All Sessions for a User
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted fs-13">
+                            Immediately invalidates all active sessions and refresh tokens for the selected user.
+                            The user will be logged out of all devices.
+                        </p>
+
+                        <form method="POST" action="sessions-revoke.php">
+                            <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                            <input type="hidden" name="action" value="revoke_user">
+
+                            <div class="mb-3">
+                                <label class="form-label">Select User</label>
+                                <select class="form-select" name="user_id" required>
+                                    <option value="">— Select user —</option>
+                                    <?php foreach ($users as $u): ?>
+                                        <option value="<?= esc($u['id']) ?>">
+                                            <?= esc($u['email']) ?> (<?= esc(ucfirst($u['role'])) ?>)<?= $u['status'] !== 'active' ? ' — ' . esc(strtoupper($u['status'])) : '' ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Reason / Justification</label>
+                                <textarea class="form-control" name="reason" rows="3" required placeholder="Required for audit log"></textarea>
+                            </div>
+
+                            <button class="btn btn-danger w-100" type="submit">
+                                <i class="ri-logout-circle-line me-2"></i>Revoke All Sessions for User
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card border-0 shadow-sm text-center p-3">
-                    <div class="fs-2 fw-bold text-danger"><?= count($adminSessions) ?></div>
-                    <div class="text-muted small">Admin Sessions</div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0 text-warning">
+                            <i class="ri-global-line me-2"></i>Revoke Session by ID
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted fs-13">
+                            Revoke a specific session token by its Session ID without affecting the user's other active sessions.
+                        </p>
+
+                        <form method="POST" action="sessions-revoke.php">
+                            <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                            <input type="hidden" name="action" value="revoke_session">
+
+                            <div class="mb-3">
+                                <label class="form-label">Session ID</label>
+                                <input type="text" class="form-control fw-mono" name="session_id" placeholder="Session ID" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Reason / Justification</label>
+                                <textarea class="form-control" name="reason" rows="3" required placeholder="Required for audit log"></textarea>
+                            </div>
+
+                            <button class="btn btn-warning w-100" type="submit">
+                                <i class="ri-close-circle-line me-2"></i>Revoke Specific Session
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card border-0 shadow-sm text-center p-3">
-                    <div class="fs-2 fw-bold text-warning"><?= count($multiSessionUsers) ?></div>
-                    <div class="text-muted small">Multi-Session Users</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card border-0 shadow-sm text-center p-3">
-                    <div class="fs-2 fw-bold text-secondary"><?= count($recentRevoked) ?></div>
-                    <div class="text-muted small">Recently Revoked</div>
+
+            <div class="col-12">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger-subtle">
+                        <h5 class="card-title mb-0 text-danger">
+                            <i class="ri-alarm-warning-line me-2"></i>Emergency — Revoke ALL Active Sessions (System-Wide)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            Nuclear option: immediately invalidates every active session across all users.
+                            Use only during confirmed active breach. Superadmin only.
+                        </p>
+
+                        <form method="POST" action="sessions-revoke.php">
+                            <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                            <input type="hidden" name="action" value="revoke_all_system">
+
+                            <div class="mb-3">
+                                <label class="form-label">Type <strong>CONFIRM REVOKE ALL</strong> to proceed</label>
+                                <input type="text" class="form-control border-danger" name="confirm_text" placeholder="CONFIRM REVOKE ALL" <?= ($authUser['role'] ?? '') !== 'superadmin' ? 'disabled' : '' ?>>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Reason / Justification</label>
+                                <textarea class="form-control" name="reason" rows="3" required <?= ($authUser['role'] ?? '') !== 'superadmin' ? 'disabled' : '' ?> placeholder="Required for audit log"></textarea>
+                            </div>
+
+                            <button class="btn btn-outline-danger w-100" type="submit" <?= ($authUser['role'] ?? '') !== 'superadmin' ? 'disabled' : '' ?>>
+                                <i class="ri-delete-bin-line me-2"></i>Revoke ALL System Sessions — Superadmin Only
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Active Sessions Table -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-transparent border-0 py-3 hstack">
-                <h5 class="mb-0 fw-semibold flex-grow-1">Active Sessions</h5>
-                <span class="badge bg-primary-subtle text-primary"><?= count($sessions) ?> total</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>User</th>
-                                <th>Role</th>
-                                <th>IP Address</th>
-                                <th>MFA Method</th>
-                                <th>Created</th>
-                                <th>Idle (min)</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php if (empty($sessions)): ?>
-                            <tr><td colspan="7" class="text-center text-muted py-4">No active sessions.</td></tr>
-                        <?php else: foreach ($sessions as $s):
-                            $isMe    = $s['user_id'] === $user['id'];
-                            $isAdmin = in_array($s['role'], ['admin','superadmin']);
-                        ?>
-                            <tr class="<?= $isAdmin ? 'table-warning' : '' ?>">
-                                <td>
-                                    <div class="fw-semibold"><?= esc($s['display_name']) ?></div>
-                                    <div class="text-muted small"><?= esc($s['email']) ?></div>
-                                </td>
-                                <td><span class="badge bg-secondary"><?= esc($s['role']) ?></span></td>
-                                <td><code><?= esc($s['ip_address']) ?></code></td>
-                                <td><?= esc($s['mfa_method'] ?? 'none') ?></td>
-                                <td class="small text-muted"><?= esc(substr($s['created_at'], 0, 16)) ?></td>
-                                <td>
-                                    <?php $idle = (int)$s['idle_minutes']; ?>
-                                    <span class="badge <?= $idle > 30 ? 'bg-danger-subtle text-danger' : ($idle > 10 ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success') ?>">
-                                        <?= $idle ?>m
-                                    </span>
-                                </td>
-                                <td>
-                                    <?php if (!$isMe): ?>
-                                    <form method="POST" class="d-inline" onsubmit="return confirm('Revoke this session?')">
-                                        <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
-                                        <input type="hidden" name="action" value="revoke_one">
-                                        <input type="hidden" name="session_id" value="<?= esc($s['id']) ?>">
-                                        <input type="hidden" name="reason" value="Admin single revocation">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                            <i class="ri-logout-box-r-line"></i> Revoke
-                                        </button>
-                                    </form>
-                                    <form method="POST" class="d-inline ms-1" onsubmit="return confirm('Revoke ALL sessions for <?= esc($s['display_name']) ?>?')">
-                                        <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
-                                        <input type="hidden" name="action" value="revoke_user">
-                                        <input type="hidden" name="user_id" value="<?= esc($s['user_id']) ?>">
-                                        <input type="hidden" name="reason" value="Admin revoked all user sessions">
-                                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Revoke all sessions for this user">
-                                            <i class="ri-shield-off-line"></i>
-                                        </button>
-                                    </form>
-                                    <?php else: ?>
-                                    <span class="text-muted small"><i class="ri-user-line me-1"></i>Your session</span>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recently Revoked -->
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-transparent border-0 py-3">
-                <h5 class="mb-0 fw-semibold">Recently Revoked Sessions</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr><th>User</th><th>IP</th><th>Revoked At</th><th>Reason</th><th>Revoked By</th></tr>
-                        </thead>
-                        <tbody>
-                        <?php if (empty($recentRevoked)): ?>
-                            <tr><td colspan="5" class="text-center text-muted py-4">No revocation history.</td></tr>
-                        <?php else: foreach ($recentRevoked as $r): ?>
-                            <tr>
-                                <td>
-                                    <div><?= esc($r['display_name']) ?></div>
-                                    <div class="text-muted small"><?= esc($r['email']) ?></div>
-                                </td>
-                                <td><code><?= esc($r['ip_address']) ?></code></td>
-                                <td class="small text-muted"><?= esc(substr($r['invalidated_at'], 0, 16)) ?></td>
-                                <td class="small"><?= esc($r['invalidation_reason'] ?? '—') ?></td>
-                                <td class="small"><?= esc($r['revoked_by_name'] ?? 'System') ?></td>
-                            </tr>
-                        <?php endforeach; endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
     </div>
 </main>
 
@@ -269,10 +440,5 @@ $done = isset($_GET['done']);
 <script src="assets/libs/sweetalert2/sweetalert2.min.js"></script>
 <script src="assets/js/pages/scroll-top.init.js"></script>
 <script src="assets/js/app.js" type="module"></script>
-<script>
-document.querySelectorAll('[data-bs-toggle="tooltip"],[title]').forEach(el => {
-    try { new bootstrap.Tooltip(el, {trigger:'hover'}); } catch(e){}
-});
-</script>
 </body>
 </html>

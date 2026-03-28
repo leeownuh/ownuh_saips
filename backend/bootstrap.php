@@ -11,6 +11,18 @@
 
 declare(strict_types=1);
 
+// Load environment variables before any session/cookie configuration so
+// proxy-aware settings apply on the current request.
+function load_env(string $path): void {
+    if (!file_exists($path)) return;
+    foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
+        [$key, $val] = explode('=', trim($line), 2);
+        $_ENV[trim($key)] = trim($val);
+        putenv(trim($key) . '=' . trim($val));
+    }
+}
+load_env(__DIR__ . '/config/.env');
 // Error reporting: never display errors in production (information disclosure)
 error_reporting(E_ALL);
 ini_set('display_errors', '0');        // ALWAYS off — errors go to log only
@@ -25,13 +37,26 @@ if (($_ENV['APP_ENV'] ?? 'production') === 'development') {
 // Only apply ini_set calls if the session has not started yet.
 // These settings MUST be set before session_start().
 if (session_status() === PHP_SESSION_NONE) {
+    // SECURITY: only trust X-Forwarded-Proto from a known proxy IP.
+    // Set TRUSTED_PROXY=any in .env when behind ngrok / a load balancer,
+    // or set TRUSTED_PROXY=127.0.0.1 to restrict to localhost proxy only.
+    $trustedProxy = $_ENV['TRUSTED_PROXY'] ?? '';
+    $remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
+    $proxyTrusted = ($trustedProxy !== '')
+                 && ($trustedProxy === 'any' || $remoteAddr === $trustedProxy);
+
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
             || (($_SERVER['SERVER_PORT'] ?? 80) == 443)
-            || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+            || ($proxyTrusted && ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
+    // SameSite=Lax required when the app is accessed through a tunnel/proxy
+    // (e.g. ngrok) because the login redirect is technically cross-origin.
+    // Override via COOKIE_SAMESITE env var. Defaults: Lax behind proxy, Strict direct.
+    $sameSite = $_ENV['COOKIE_SAMESITE'] ?? ($proxyTrusted ? 'Lax' : 'Strict');
 
     ini_set('session.cookie_httponly', '1');
     ini_set('session.cookie_secure',   $isHttps ? '1' : '0');
-    ini_set('session.cookie_samesite', 'Strict');
+    ini_set('session.cookie_samesite', $sameSite);
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
     ini_set('session.gc_maxlifetime', '3600');
@@ -39,16 +64,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // ── Environment loader ───────────────────────────────────────────────────────
-function load_env(string $path): void {
-    if (!file_exists($path)) return;
-    foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-        if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
-        [$key, $val] = explode('=', trim($line), 2);
-        $_ENV[trim($key)] = trim($val);
-        putenv(trim($key) . '=' . trim($val));
-    }
-}
-load_env(__DIR__ . '/config/.env');
+$appTimezone = $_ENV['APP_TIMEZONE'] ?? 'Asia/Kolkata';
+date_default_timezone_set($appTimezone);
 
 // ── Database Class (mysqli OOP — CAP512 Unit 7: Objects + Databases) ─────────
 class Database {
@@ -74,6 +91,7 @@ class Database {
         }
 
         $this->conn->set_charset('utf8mb4');
+        $this->conn->query("SET time_zone = '+05:30'");
     }
 
     // Singleton pattern — one connection per request
@@ -273,7 +291,8 @@ function require_auth(string $minRole = 'user'): array {
  */
 function format_ts(?string $ts, string $format = 'Y-m-d H:i:s'): string {
     if (!$ts) return '—';
-    return date($format, strtotime($ts)) . ' UTC';
+    $label = $_ENV['APP_TIMEZONE_LABEL'] ?? 'IST';
+    return date($format, strtotime($ts)) . ' ' . $label;
 }
 
 /**
@@ -567,7 +586,10 @@ function get_active_sessions(int $limit = 100): array {
         'SELECT s.id, s.user_id, u.display_name, u.email, u.role,
                 s.ip_address, s.mfa_method, s.created_at, s.expires_at,
                 s.last_used_at,
-                TIMESTAMPDIFF(MINUTE, IFNULL(s.last_used_at, s.created_at), NOW()) as idle_minutes
+                GREATEST(
+  0,
+  TIMESTAMPDIFF(MINUTE, IFNULL(s.last_used_at, s.created_at), NOW())
+) as idle_minutes
          FROM sessions s
          JOIN users u ON u.id = s.user_id
          WHERE s.invalidated_at IS NULL AND s.expires_at > NOW()
@@ -663,6 +685,22 @@ function verify_csrf(?string $token): bool {
     return hash_equals($_SESSION['csrf_token'] ?? '', $token ?? '');
 }
 
+function log_dev_otp(string $email, string $otp): void {
+    if (($_ENV['APP_ENV'] ?? 'production') === 'production') {
+        return;
+    }
+
+    $line = sprintf(
+        "[%s] [SAIPS OTP] %s => %s%s",
+        date('Y-m-d H:i:s'),
+        $email,
+        $otp,
+        PHP_EOL
+    );
+
+    @file_put_contents(__DIR__ . '/../logs/dev-otp.log', $line, FILE_APPEND | LOCK_EX);
+}
+
 // ── Image helper functions (CAP512 Unit 7: Graphics) ─────────────────────────
 
 /**
@@ -676,7 +714,7 @@ function generate_avatar_image(string $name, int $size = 40): string {
     $initials = strtoupper(substr($words[0], 0, 1) . (isset($words[1]) ? substr($words[1], 0, 1) : ''));
 
     // CAP512 Unit 3: control flow — pick colour from name hash
-    $colours  = ['#0d6efd','#198754','#dc3545','#fd7e14','#6f42c1','#0dcaf0','#20c997'];
+    $colours  = ['#9c2fba','#198754','#dc3545','#fd7e14','#6f42c1','#0dcaf0','#20c997'];
     $colIndex = abs(crc32($name)) % count($colours);
     $bg       = $colours[$colIndex];
 
@@ -743,15 +781,31 @@ SVG;
  */
 function get_audit_pdo(): \PDO {
     static $pdo = null;
-    if ($pdo !== null) return $pdo;
+
+    // Verify cached connection is still alive (avoids MySQL error 2006 "server has gone away")
+    if ($pdo !== null) {
+        try { $pdo->query('SELECT 1'); return $pdo; }
+        catch (\PDOException $e) { $pdo = null; } // stale — reconnect below
+    }
 
     $dbConfig = require __DIR__ . '/config/database.php';
-    $pdo = new \PDO(
-        "mysql:host={$dbConfig['app']['host']};dbname={$dbConfig['app']['name']};charset=utf8mb4",
-        $dbConfig['app']['user'],
-        $dbConfig['app']['pass'],
-        $dbConfig['app']['options']
+    $cfg      = $dbConfig['app'];
+
+    // Include port in DSN (was missing — caused refusals on non-3306 setups)
+    $dsn = sprintf(
+        'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
+        $cfg['host'],
+        (int)($cfg['port'] ?? 3306),
+        $cfg['name']
     );
+
+    try {
+        $pdo = new \PDO($dsn, $cfg['user'], $cfg['pass'], $cfg['options']);
+    } catch (\PDOException $e) {
+        error_log('[SAIPS DB] get_audit_pdo() failed: ' . $e->getMessage());
+        throw new \RuntimeException('Database unavailable — check DB_HOST/DB_PORT/DB_USER in .env');
+    }
+
     return $pdo;
 }
 
@@ -832,15 +886,22 @@ function create_jwt_token(array $user, int $ttl = 900): string {
  * Set authentication cookies — SRS §3.4
  */
 function set_auth_cookies(string $accessToken): void {
+    $trustedProxy = $_ENV['TRUSTED_PROXY'] ?? '';
+    $remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
+    $proxyTrusted = ($trustedProxy !== '')
+                 && ($trustedProxy === 'any' || $remoteAddr === $trustedProxy);
+
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
              || (($_SERVER['SERVER_PORT'] ?? 80) == 443)
-             || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-    // SECURITY FIX: SameSite=Strict (was Lax — cross-site navigation could attach cookie)
+             || ($proxyTrusted && ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
+    $sameSite = $_ENV['COOKIE_SAMESITE'] ?? ($proxyTrusted ? 'Lax' : 'Strict');
+
     setcookie('saips_access', $accessToken, [
         'expires'  => time() + 900,
         'path'     => '/',
         'secure'   => $isHttps,
         'httponly' => true,
-        'samesite' => 'Strict',
+        'samesite' => $sameSite,
     ]);
 }

@@ -4,7 +4,7 @@
         <div class="offcanvas-header hstack border-bottom">
             <div class="app-sidebar-logo">
                 <a href="dashboard.php">
-                    <img height="100" class="app-sidebar-logo-default h-25px" alt="Logo" src="assets/images/light-logo.png">
+                    <img height="70" class="app-sidebar-logo-default h-25px" alt="Logo" src="assets/images/light-logo.png">
                     <img height="40" class="app-sidebar-logo-minimize" alt="Logo" src="assets/images/Favicon.png">
                 </a>
             </div>
@@ -24,8 +24,8 @@
                                 <li class="slide"><a href="login.php" class="side-menu__item">Sign In</a></li>
                                 <li class="slide"><a href="otp-verify.php" class="side-menu__item">MFA Verify</a></li>
                                 <li class="slide"><a href="auth-lockscreen.html" class="side-menu__item">Session Lock</a></li>
-                                <li class="slide"><a href="login.php?forgot=1" class="side-menu__item">Reset Password</a></li>
-                                <li class="slide"><a href="auth-create-password.html" class="side-menu__item">Create Password</a></li>
+                                <li class="slide"><a href="forgot-password.php" class="side-menu__item">Reset Password</a></li>
+                                <li class="slide"><a href="auth-create-password.php" class="side-menu__item">Create Password</a></li>
                             </ul>
                         </li>
                         <li class="menu-title" role="presentation">Intrusion Prevention</li>

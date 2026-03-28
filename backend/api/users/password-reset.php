@@ -35,14 +35,17 @@ $pdo       = new PDO(
     $dbConfig['app']['user'], $dbConfig['app']['pass'], $dbConfig['app']['options']
 );
 
-$redis = new Redis();
-$redis->connect($dbConfig['redis']['host'], (int)$dbConfig['redis']['port']);
-if ($dbConfig['redis']['pass']) {
-    $redis->auth($dbConfig['redis']['pass']);
+$redis = null;
+if (class_exists('Redis')) {
+    $redis = new Redis();
+    $redis->connect($dbConfig['redis']['host'], (int)$dbConfig['redis']['port']);
+    if ($dbConfig['redis']['pass']) {
+        $redis->auth($dbConfig['redis']['pass']);
+    }
 }
 
 AuditMiddleware::init($pdo);
-$rateLimit = new RateLimitMiddleware($redis, $secConfig);
+$rateLimit = $redis ? new RateLimitMiddleware($redis, $secConfig) : null;
 
 // ── Authenticate admin via JWT ───────────────────────────────────────────────
 $auth = new AuthMiddleware($secConfig);
@@ -104,18 +107,22 @@ $resetToken = bin2hex(random_bytes(32));
 $resetTokenHash = hash('sha256', $resetToken);
 $expiresAt = time() + 3600; // 1 hour
 
-// Store in Redis
-$redis->setex("saips:password_reset:{$resetTokenHash}", 3600, json_encode([
-    'user_id'    => $targetUserId,
-    'admin_id'   => $adminId,
-    'reason'     => $reason,
-    'created_at' => time(),
-    'expires_at' => $expiresAt,
-]));
+// Store in Redis when available for fast lookup / async workers.
+if ($redis) {
+    $redis->setex("saips:password_reset:{$resetTokenHash}", 3600, json_encode([
+        'user_id'    => $targetUserId,
+        'admin_id'   => $adminId,
+        'reason'     => $reason,
+        'created_at' => time(),
+        'expires_at' => $expiresAt,
+    ]));
+}
 
-// Store hash in database for audit trail
-$pdo->prepare('INSERT INTO password_reset_tokens (user_id, token_hash, created_by, expires_at, reason) VALUES (?, ?, ?, FROM_UNIXTIME(?), ?)')
-    ->execute([$targetUserId, $resetTokenHash, $adminId, $expiresAt, $reason]);
+// Store the reset in the same canonical table used by the self-service flow.
+$pdo->prepare(
+    'INSERT INTO password_resets (user_id, token_hash, created_by, reason, requested_ip, requested_at, expires_at, used_at)
+     VALUES (?, ?, ?, ?, ?, NOW(), FROM_UNIXTIME(?), NULL)'
+)->execute([$targetUserId, $resetTokenHash, $adminId, $reason, $_SERVER['REMOTE_ADDR'] ?? null, $expiresAt]);
 
 // ── Invalidate all existing sessions for this user ────────────────────────────
 $pdo->prepare('UPDATE sessions SET invalidated_at = NOW(), invalidated_by = ?, invalidation_reason = ? WHERE user_id = ? AND invalidated_at IS NULL')
@@ -125,7 +132,9 @@ $pdo->prepare('UPDATE sessions SET invalidated_at = NOW(), invalidated_by = ?, i
 $stmt = $pdo->prepare('SELECT refresh_token_hash FROM sessions WHERE user_id = ?');
 $stmt->execute([$targetUserId]);
 foreach ($stmt->fetchAll() as $session) {
-    $redis->del("saips:session:{$session['refresh_token_hash']}");
+    if ($redis) {
+        $redis->del("saips:session:{$session['refresh_token_hash']}");
+    }
 }
 
 // ── Send email if requested ──────────────────────────────────────────────────
@@ -136,16 +145,18 @@ if ($sendEmail && $targetUser['email']) {
     error_log("[SAIPS] Password reset for {$targetUser['email']}: {$resetLink}");
     
     // Queue email notification
-    $redis->lpush('saips:email:queue', json_encode([
-        'to'       => $targetUser['email'],
-        'template' => 'password_reset',
-        'data'     => [
-            'display_name' => $targetUser['display_name'],
-            'reset_link'   => $resetLink,
-            'expires_in'   => '1 hour',
-            'admin_name'   => $admin['email'] ?? 'Administrator',
-        ],
-    ]));
+    if ($redis) {
+        $redis->lpush('saips:email:queue', json_encode([
+            'to'       => $targetUser['email'],
+            'template' => 'password_reset',
+            'data'     => [
+                'display_name' => $targetUser['display_name'],
+                'reset_link'   => $resetLink,
+                'expires_in'   => '1 hour',
+                'admin_name'   => $admin['email'] ?? 'Administrator',
+            ],
+        ]));
+    }
 }
 
 // ── Audit log ────────────────────────────────────────────────────────────────

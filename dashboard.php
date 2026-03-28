@@ -92,7 +92,7 @@ $csrf = csrf_token();
                 <div class="d-flex my-xl-auto align-items-center flex-wrap flex-shrink-0 gap-2">
                     <!-- CAP512 Unit 2: embedding PHP in HTML -->
                     <span class="badge bg-success-subtle text-success border border-success px-3 py-2">
-                        <i class="ri-database-2-line me-1"></i>Live DB · <?= esc(date('H:i:s')) ?> UTC
+                        <i class="ri-database-2-line me-1"></i>Live DB · <?= esc(date('H:i:s')) ?> IST
                     </span>
                     <a href="javascript:void(0)" class="btn btn-sm btn-light-primary" data-bs-toggle="modal" data-bs-target="#addAlertModal">
                         <i class="ri-add-line me-1"></i>Create Alert Rule
@@ -385,14 +385,11 @@ $csrf = csrf_token();
                     </div>
                     <div class="col-md-6">
                         <div class="card h-100">
-                            <div class="card-header d-flex align-items-center justify-content-between">
-                                <h5 class="card-title mb-0 flex-grow-1"><i class="ri-map-pin-2-line me-2 text-primary"></i>Login Origin Heatmap</h5>
-                                <button class="btn btn-sm btn-light-primary flex-shrink-0">Generate Report</button>
-                            </div>
+                            
                             <div class="card-body">
                                 <style>
 #global-reach-map .jvm-region.jvm-element { fill: #dee2e8; }
-#global-reach-map .jvm-region.jvm-element[data-colored] { fill: unset; }
+#global-reach-map .jvm-region.jvm-element[data-colored] { fill: rgb(33 240 54) !important; }
 </style>
 <div id="global-reach-map" class="jvm-container" style="height:320px;min-height:320px;width:100%;"></div>
                                 <!-- CAP512 Unit 5: json_encode of PHP array for JS -->
@@ -406,42 +403,73 @@ $csrf = csrf_token();
         </div>
     </main>
 
-    <!-- Add Alert Rule Modal -->
-    <div class="modal fade" id="addAlertModal" tabindex="-1">
+    <!-- Add Alert Rule Modal — AJAX submit (no full-page reload) -->
+    <div class="modal fade" id="addAlertModal" tabindex="-1" aria-labelledby="addAlertModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="ri-alarm-warning-line me-2"></i>Create Alert Rule</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="addAlertModalLabel"><i class="ri-alarm-warning-line me-2"></i>Create Alert Rule</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <!-- CAP512 Unit 2: CSRF token in form -->
-                    <form method="POST" action="backend/api/ips/alert-rules.php">
-                        <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                    <!-- Inline feedback banner (hidden by default) -->
+                    <div id="alertRuleMsg" class="alert d-none mb-3" role="alert"></div>
+
+                    <!-- CAP512 Unit 2: CSRF token + form data sent via fetch() -->
+                    <form id="alertRuleForm" novalidate>
+                        <input type="hidden" id="alertCsrfToken" value="<?= esc($csrf) ?>">
+
                         <div class="mb-3">
-                            <label class="form-label">Trigger Condition</label>
-                            <input type="text" class="form-control" name="condition" placeholder="e.g. 10 failures / 5 min per user">
+                            <label class="form-label fw-semibold" for="alertCondition">
+                                Trigger Condition <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="alertCondition" name="condition"
+                                   placeholder="e.g. 10 failures / 5 min per user" required>
+                            <div class="invalid-feedback">Please describe the trigger condition.</div>
                         </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold" for="alertEventType">Event Type</label>
+                                <select class="form-select" id="alertEventType" name="event_type">
+                                    <option value="AUTH-002" selected>AUTH-002 — Failed Login</option>
+                                    <option value="AUTH-003">AUTH-003 — Account Locked</option>
+                                    <option value="IPS-001">IPS-001 — IP Blocked</option>
+                                    <option value="IPS-002">IPS-002 — Brute-Force</option>
+                                    <option value="SEC-002">SEC-002 — Suspicious Activity</option>
+                                    <option value="INC-001">INC-001 — Incident Created</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold" for="alertSeverity">Severity</label>
+                                <select class="form-select" id="alertSeverity" name="severity">
+                                    <option value="sev1">SEV-1 Critical</option>
+                                    <option value="sev2" selected>SEV-2 High</option>
+                                    <option value="sev3">SEV-3 Medium</option>
+                                    <option value="sev4">SEV-4 Low</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
-                            <label class="form-label">Severity</label>
-                            <select class="form-select" name="severity">
-                                <option value="sev1">SEV-1 Critical</option>
-                                <option value="sev2" selected>SEV-2 High</option>
-                                <option value="sev3">SEV-3 Medium</option>
-                                <option value="sev4">SEV-4 Low</option>
+                            <label class="form-label fw-semibold" for="alertAction">
+                                Automated Action <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="alertAction" name="action" required>
+                                <option value="">— Select an action —</option>
+                                <option value="Account locked + admin email">Account locked + admin email</option>
+                                <option value="IP blocked 60 min">IP blocked 60 min</option>
+                                <option value="WAF rule deployed">WAF rule deployed</option>
+                                <option value="Alert only">Alert only</option>
                             </select>
+                            <div class="invalid-feedback">Please select an automated action.</div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Automated Action</label>
-                            <select class="form-select" name="action">
-                                <option>Account locked + admin email</option>
-                                <option>IP blocked 60 min</option>
-                                <option>WAF rule deployed</option>
-                                <option>Alert only</option>
-                            </select>
-                        </div>
+
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">Create Rule</button>
+                            <button type="submit" class="btn btn-primary" id="alertRuleSubmitBtn">
+                                <span id="alertRuleSpinner" class="spinner-border spinner-border-sm me-1 d-none" role="status"></span>
+                                Create Rule
+                            </button>
                             <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                         </div>
                     </form>
@@ -449,6 +477,109 @@ $csrf = csrf_token();
             </div>
         </div>
     </div>
+
+    <!-- Toast for success / error feedback after modal closes -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+        <div id="alertRuleToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body fw-semibold" id="alertRuleToastBody"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // CAP512 Unit 2 + 3: AJAX form handling with fetch() and control flow
+    (function () {
+        'use strict';
+        const form      = document.getElementById('alertRuleForm');
+        const msgBox    = document.getElementById('alertRuleMsg');
+        const spinner   = document.getElementById('alertRuleSpinner');
+        const submitBtn = document.getElementById('alertRuleSubmitBtn');
+        const modalEl   = document.getElementById('addAlertModal');
+
+        if (!form || !modalEl) return;
+
+        // Reset form and feedback when modal opens
+        modalEl.addEventListener('show.bs.modal', function () {
+            form.reset();
+            form.classList.remove('was-validated');
+            msgBox.className = 'alert d-none mb-3';
+            msgBox.textContent = '';
+        });
+
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            form.classList.add('was-validated');
+            if (!form.checkValidity()) return;
+
+            // Build payload — CAP512 Unit 5: FormData → plain object
+            const data = {
+                csrf_token : document.getElementById('alertCsrfToken').value,
+                action     : 'add',
+                condition  : document.getElementById('alertCondition').value.trim(),
+                event_type : document.getElementById('alertEventType').value,
+                severity   : document.getElementById('alertSeverity').value,
+                automated_action : document.getElementById('alertAction').value,
+            };
+            // Send as form-encoded so verify_csrf() works with $_POST
+            const body = new URLSearchParams(data).toString();
+
+            submitBtn.disabled = true;
+            spinner.classList.remove('d-none');
+
+            try {
+                const res  = await fetch('backend/api/ips/alert-rules.php', {
+                    method  : 'POST',
+                    headers : { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                    body    : body,
+                });
+                const json = await res.json();
+
+                if (res.ok && json.status === 'ok') {
+                    // Success: close modal, show toast
+                    bootstrap.Modal.getInstance(modalEl)?.hide();
+                    _showToast(json.message || 'Alert rule created.', 'success');
+                    // Refresh the Active Alert Rules counter without full reload
+                    _bumpAlertCount();
+                } else {
+                    _showInlineError(json.message || 'Could not save rule. Please try again.');
+                }
+            } catch (err) {
+                _showInlineError('Network error — please check your connection and try again.');
+                console.error('[SAIPS Alert Rules]', err);
+            } finally {
+                submitBtn.disabled = false;
+                spinner.classList.add('d-none');
+            }
+        });
+
+        function _showInlineError(msg) {
+            msgBox.className   = 'alert alert-danger mb-3';
+            msgBox.textContent = msg;
+        }
+
+        function _showToast(msg, type) {
+            const toastEl   = document.getElementById('alertRuleToast');
+            const toastBody = document.getElementById('alertRuleToastBody');
+            if (!toastEl || !toastBody) return;
+            toastEl.className = 'toast align-items-center border-0 text-bg-' + (type === 'success' ? 'success' : 'danger');
+            toastBody.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+            new bootstrap.Toast(toastEl, { delay: 4000 }).show();
+        }
+
+        function _bumpAlertCount() {
+            // Find the "Active Alert Rules" stat card and increment its display value
+            document.querySelectorAll('.project-stat h3').forEach(function (el) {
+                const card = el.closest('.card');
+                if (card && card.querySelector('h6')?.textContent.includes('Alert Rules')) {
+                    const cur = parseInt(el.textContent, 10) || 0;
+                    el.textContent = String(cur + 1).padStart(2, '0');
+                }
+            });
+        }
+    }());
+    </script>
 
     <!-- JAVASCRIPT -->
     <script src="assets/js/sidebar.js"></script>
@@ -484,7 +615,7 @@ $csrf = csrf_token();
                 stroke: { show: true, width: 2, colors: ['transparent'] },
                 xaxis:  { categories: <?= $chartLabels ?> },
                 yaxis:  { title: { text: 'Events' } },
-                colors: ['#0d6efd', '#ffc107', '#dc3545'],
+                colors: ['#9c2fba', '#77ef36', '#f41111'],
                 fill:   { opacity: 1 },
                 legend: { position: 'bottom' },
                 tooltip: { y: { formatter: v => v + ' events' } },
@@ -510,13 +641,7 @@ $csrf = csrf_token();
                 // Build gradient colours: light blue → dark blue based on login count
                 const vals = Object.values(origins).map(Number);
                 const maxV = vals.length ? Math.max(...vals) : 1;
-                function loginColor(count) {
-                    const t = maxV > 0 ? count / maxV : 0;
-                    const r = Math.round(191 + (29  - 191) * t);
-                    const g = Math.round(219 + (78  - 219) * t);
-                    const b = Math.round(254 + (216 - 254) * t);
-                    return 'rgb(' + r + ',' + g + ',' + b + ')';
-                }
+                const mapFill = 'rgb(33 240 54)';
 
                 const mapInstance = new jsVectorMap({
                     map:    'world',
@@ -525,7 +650,7 @@ $csrf = csrf_token();
                     showTooltip: true,
                     regionStyle: {
                         initial: { fill: '#dee2e8' },
-                        hover:   { fill: '#93c5fd', cursor: 'pointer' },
+                        hover:   { fill: '#dfeef1', cursor: 'pointer' },
                     },
                     onRegionTooltipShow: function(e, tooltip, code) {
                         const count = origins[code] || 0;
@@ -539,8 +664,7 @@ $csrf = csrf_token();
                 for (const [code, count] of Object.entries(origins)) {
                     if (mapInstance.regions && mapInstance.regions[code]) {
                         const node = mapInstance.regions[code].element.shape.node;
-                        const color = loginColor(count / maxV);
-                        node.style.setProperty('fill', color, 'important');
+                        node.style.setProperty('fill', mapFill, 'important');
                         node.setAttribute('data-colored', '1');
                     }
                 }

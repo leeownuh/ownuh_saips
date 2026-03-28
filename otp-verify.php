@@ -24,6 +24,7 @@ if (empty($_SESSION['mfa_pending']) || $_SESSION['mfa_pending']['expires'] < tim
 $pending = $_SESSION['mfa_pending'];
 $error   = '';
 $factor  = $pending['mfa_factor'];
+$authMethod = $factor;
 
 // Mask email — CAP512 Unit 4: String manipulation
 function mask_email(string $email): string {
@@ -57,6 +58,7 @@ if (isset($_GET['resend']) && $factor === 'email_otp') {
         $_SESSION['mfa_otp_expires']      = time() + 600;
         $_SESSION['mfa_otp_resend_count'] = $resendCount + 1;
         $_SESSION['mfa_otp_last_resend']  = time();
+        log_dev_otp($pending['email'], $otp);
         // SECURITY: OTP dispatched via EmailService — never log credentials
         $success = 'A new 6-digit code has been sent to your email.';
     }
@@ -72,6 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     unset($_SESSION['csrf_token']); // Rotate after use
 
+    $bypassToken = trim((string)($_POST['bypass_token'] ?? ''));
+
     // CAP512 Unit 4: String — assemble digits into code
     $digits = [];
     for ($i = 1; $i <= 6; $i++) {
@@ -84,7 +88,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $verified = false;
     $db = Database::getInstance();
 
-    if ($factor === 'email_otp') {
+    if ($bypassToken !== '') {
+        $bypassHash = hash('sha256', $bypassToken);
+        $bypassRow = $db->fetchOne(
+            'SELECT mfa_bypass_token, mfa_bypass_expiry
+             FROM users
+             WHERE id = ?',
+            [$pending['user_id']]
+        );
+
+        if ($bypassRow
+            && !empty($bypassRow['mfa_bypass_token'])
+            && !empty($bypassRow['mfa_bypass_expiry'])
+            && strtotime((string)$bypassRow['mfa_bypass_expiry']) > time()
+            && hash_equals((string)$bypassRow['mfa_bypass_token'], $bypassHash)
+        ) {
+            $db->execute(
+                'UPDATE users
+                 SET mfa_bypass_token = NULL,
+                     mfa_bypass_expiry = NULL
+                 WHERE id = ?',
+                [$pending['user_id']]
+            );
+
+            try {
+                $dbConfig = require __DIR__ . '/backend/config/database.php';
+                $redis = new Redis();
+                $redis->connect($dbConfig['redis']['host'], (int)$dbConfig['redis']['port']);
+                if (!empty($dbConfig['redis']['pass'])) {
+                    $redis->auth($dbConfig['redis']['pass']);
+                }
+                $redis->del("saips:mfa_bypass:{$bypassHash}");
+            } catch (Throwable $e) {
+                error_log('[SAIPS] MFA bypass Redis cleanup failed: ' . $e->getMessage());
+            }
+
+            $verified = true;
+            $authMethod = 'bypass_token';
+        } else {
+            $error = 'Invalid or expired bypass token.';
+        }
+
+    } elseif ($factor === 'email_otp') {
         // Verify email OTP — CAP512 Unit 2: time(), session variables
         if (!empty($_SESSION['mfa_otp'])
             && ($_SESSION['mfa_otp_expires'] ?? 0) > time()
@@ -145,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pending['user_id'],
             $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0',
             'XX',
-            $factor,
+            $authMethod,
             0
         );
 
@@ -247,7 +292,7 @@ $factorLabel = match($factor) {
             font-weight: 700;
             border-radius: 8px;
         }
-        .otp-digit:focus { border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13,110,253,.25); }
+        .otp-digit:focus { border-color: #9c2fba; box-shadow: 0 0 0 3px rgba(13,110,253,.25); }
     </style>
 </head>
 <body>
@@ -261,7 +306,7 @@ $factorLabel = match($factor) {
                         <!-- Left panel -->
                         <div class="col-lg-6 d-none d-lg-block p-0">
                             <div class="bg-login card card-body m-0 h-100 border-0">
-                                <img src="assets/images/auth/bg-img-2.png" class="img-fluid auth-banner" alt="">
+                                <img src="assets/images/auth/bg-img-2.jpg" class="img-fluid auth-banner" alt="">
                                 <div class="auth-contain">
                                     <div class="text-center text-white my-4 p-4">
                                         <?php
@@ -383,6 +428,26 @@ $factorLabel = match($factor) {
                                         <i class="ri-shield-check-line me-2"></i>Verify &amp; Sign In
                                     </button>
                                     <?php endif; ?>
+
+                                    <div class="text-center text-muted fs-12 my-3">or</div>
+
+                                    <div class="mb-3">
+                                        <label for="bypass_token" class="form-label">
+                                            Admin-Issued Bypass Token
+                                        </label>
+                                        <input type="text"
+                                               id="bypass_token"
+                                               name="bypass_token"
+                                               class="form-control"
+                                               placeholder="Paste the recovery bypass token">
+                                        <div class="form-text">
+                                            Use only a token issued by an administrator for account recovery. Tokens are single-use.
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" class="btn btn-outline-warning rounded-2 w-100">
+                                        <i class="ri-key-line me-2"></i>Use Bypass Token
+                                    </button>
                                 </form>
 
                                 <hr class="my-4">

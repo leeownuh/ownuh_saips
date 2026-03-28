@@ -3,11 +3,12 @@
 ## Contents
 
 1. GitHub push
-2. Local serving
-3. ngrok exposure
-4. Linux/Apache deployment
-5. Environment variables
-6. Security checklist
+2. Scripted setup
+3. Local serving
+4. ngrok exposure
+5. Linux/Apache deployment
+6. Environment variables
+7. Security checklist
 
 ---
 
@@ -35,7 +36,56 @@ If a private key was committed in the past, rotate it and clean history before p
 
 ---
 
-## 2. Local serving
+## 2. Scripted setup
+
+### Windows / XAMPP
+
+```powershell
+cd C:\xampp\htdocs\ownuh_saips_fixed
+Set-ExecutionPolicy -Scope Process Bypass
+.\setup_windows.ps1
+```
+
+Or:
+
+```bat
+cd C:\xampp\htdocs\ownuh_saips_fixed
+setup_windows.bat
+```
+
+By default this imports the recruiter-focused `database/portfolio_seed.sql` dataset and writes `backend/config/.env`.
+
+### Linux
+
+```bash
+git clone https://github.com/YOUR_USERNAME/ownuh-saips.git /var/www/ownuh-saips
+cd /var/www/ownuh-saips
+bash install.sh
+```
+
+By default this also imports `database/portfolio_seed.sql` and writes `backend/config/.env`.
+
+### Seed modes
+
+Both setup scripts support alternate seed files:
+
+- `portfolio` for recruiter/demo setup
+- `dev` for older development seed data
+- `test` for deterministic test fixtures
+
+Examples:
+
+```powershell
+.\setup_windows.ps1 -Seed portfolio
+```
+
+```bash
+SEED_MODE=portfolio bash install.sh
+```
+
+---
+
+## 3. Local serving
 
 ### PHP built-in server
 
@@ -65,7 +115,7 @@ http://localhost/ownuh_saips_fixed/login.php
 
 ---
 
-## 3. Expose with ngrok
+## 4. Expose with ngrok
 
 ### Install and authenticate
 
@@ -116,7 +166,7 @@ Why:
 
 ---
 
-## 4. Linux / Apache deployment
+## 5. Linux / Apache deployment
 
 ### Recommended stack
 
@@ -137,6 +187,8 @@ bash install.sh
 sudo bash setup_apache.sh 80
 ```
 
+For portfolio demos, the default scripted install is already the right choice because it loads the fuller sample dataset automatically.
+
 ### Production `.env`
 
 ```env
@@ -154,7 +206,7 @@ BCRYPT_COST=14
 
 ---
 
-## 5. Environment variables
+## 6. Environment variables
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -172,11 +224,13 @@ BCRYPT_COST=14
 
 ---
 
-## 6. Security checklist
+## 7. Security checklist
 
 - [ ] `backend/config/.env` is not tracked by git
 - [ ] `keys/private.pem` is not tracked by git
 - [ ] `APP_URL` matches the real public URL
+- [ ] Windows setup tested with `setup_windows.ps1` if sharing with Windows reviewers
+- [ ] Linux setup tested with `install.sh` if sharing with Linux reviewers
 - [ ] For ngrok: `TRUSTED_PROXY=any` and `COOKIE_SAMESITE=Lax` are set
 - [ ] Password reset flow tested end to end
 - [ ] `auth-create-password.php` tested after sign-in

@@ -14,7 +14,7 @@ if (!isset($user)) $user = [];
                     <!-- HORIZONTAL BRAND LOGO -->
                     <div class="app-sidebar-logo app-horizontal-logo justify-content-center align-items-center">
                         <a href="dashboard.php">
-                            <img height="100" class="app-sidebar-logo-default" alt="Logo" loading="lazy"
+                            <img height="70" class="app-sidebar-logo-default" alt="Logo" loading="lazy"
                                 src="assets/images/light-logo.png">
                             <img height="40" class="app-sidebar-logo-minimize" alt="Logo" loading="lazy"
                                 src="assets/images/Favicon.png">

@@ -12,6 +12,10 @@ $db     = Database::getInstance();
 $search = trim($_GET['search'] ?? '');
 $status = trim($_GET['status'] ?? '');
 $page   = max(1, (int)($_GET['page'] ?? 1));
+$flashBypass = $_SESSION['flash_mfa_bypass'] ?? null;
+$flashUser = $_SESSION['flash_user_created'] ?? null;
+unset($_SESSION['flash_mfa_bypass']);
+unset($_SESSION['flash_user_created']);
 
 // POST: handle quick actions (lock/unlock/reset)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -19,28 +23,194 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(403);
         die('CSRF token mismatch.');
     }
+    $currentUser = verify_session();
     // SECURITY FIX: validate action against strict allowlist before executing
     $action   = $_POST['action']    ?? '';
     $targetId = $_POST['user_id']   ?? '';
     $reason   = $_POST['reason']    ?? 'Admin action';
 
-    $allowedActions = ['lock', 'unlock', 'delete'];
+    if ($action === 'create_user') {
+        $displayName = trim((string)($_POST['display_name'] ?? ''));
+        $email = strtolower(trim((string)($_POST['email'] ?? '')));
+        $newRole = (string)($_POST['role'] ?? 'user');
+        $newStatus = (string)($_POST['status'] ?? 'pending');
+
+        if ($displayName === '' || $email === '') {
+            http_response_code(400);
+            die('Display name and email are required.');
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            http_response_code(422);
+            die('Invalid email address.');
+        }
+
+        if (!in_array($newRole, ['user', 'manager', 'admin', 'superadmin'], true)) {
+            http_response_code(422);
+            die('Invalid role.');
+        }
+
+        if (!in_array($newStatus, ['active', 'pending', 'locked', 'suspended'], true)) {
+            http_response_code(422);
+            die('Invalid status.');
+        }
+
+        $currentRole = $currentUser['role'] ?? 'user';
+        if (in_array($newRole, ['admin', 'superadmin'], true) && $currentRole !== 'superadmin') {
+            http_response_code(403);
+            die('Only superadmins can create admin or superadmin users.');
+        }
+
+        $existingUser = $db->fetchOne(
+            'SELECT id FROM users WHERE email = ? AND deleted_at IS NULL',
+            [$email]
+        );
+        if ($existingUser) {
+            http_response_code(409);
+            die('A user with that email already exists.');
+        }
+
+        $newUserId = 'usr-' . substr(bin2hex(random_bytes(16)), 0, 33);
+        $defaultPassword = 'Welcome@SAIPS2026!';
+        $bcryptCost = max(10, min(14, (int)($_ENV['BCRYPT_COST'] ?? 12)));
+        $db->execute(
+            'INSERT INTO users (id, display_name, email, role, status, mfa_enrolled, mfa_factor, email_verified)
+             VALUES (?, ?, ?, ?, ?, 0, "none", 0)',
+            [$newUserId, $displayName, $email, $newRole, $newStatus]
+        );
+
+        try {
+            $dbConfig = require __DIR__ . '/backend/config/database.php';
+            $authDsn = sprintf(
+                'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
+                $dbConfig['auth']['host'],
+                (int)($dbConfig['auth']['port'] ?? 3306),
+                $dbConfig['auth']['name']
+            );
+            $authPdo = new PDO(
+                $authDsn,
+                $dbConfig['auth']['user'],
+                $dbConfig['auth']['pass'],
+                $dbConfig['auth']['options']
+            );
+            $passwordHash = password_hash($defaultPassword, PASSWORD_BCRYPT, ['cost' => $bcryptCost]);
+            $stmt = $authPdo->prepare(
+                'INSERT INTO credentials (user_id, password_hash, bcrypt_cost)
+                 VALUES (?, ?, ?)'
+            );
+            $stmt->execute([$newUserId, $passwordHash, $bcryptCost]);
+        } catch (Throwable $e) {
+            $db->execute('DELETE FROM users WHERE id = ?', [$newUserId]);
+            error_log('[SAIPS] Failed to create default credentials for new user: ' . $e->getMessage());
+            http_response_code(500);
+            die('User record created, but default credentials could not be provisioned.');
+        }
+
+        $_SESSION['flash_user_created'] = [
+            'display_name' => $displayName,
+            'email' => $email,
+            'role' => $newRole,
+            'status' => $newStatus,
+            'default_password' => $defaultPassword,
+        ];
+
+        unset($_SESSION['csrf_token']);
+        header('Location: users.php?status=' . urlencode($status) . '&search=' . urlencode($search) . '&page=' . $page);
+        exit;
+    }
+
+    $allowedActions = ['lock', 'unlock', 'delete', 'issue_bypass'];
     if (!in_array($action, $allowedActions, true)) {
         http_response_code(400);
         die('Invalid action.');
     }
 
-    // Validate targetId is a non-empty hex string (matches UUID format used in DB)
-    if (!$targetId || !preg_match('/^[0-9a-f]{32}$/', $targetId)) {
+    // Accept the UUID-like and prefixed user IDs used across the app.
+    if (!$targetId || !preg_match('/^[A-Za-z0-9-]{8,64}$/', $targetId)) {
         http_response_code(400);
         die('Invalid user ID.');
     }
 
     // Prevent admin from acting on their own account (accidental self-lockout)
-    $currentUser = verify_session();
     if ($currentUser && $currentUser['sub'] === $targetId && $action !== 'unlock') {
         http_response_code(400);
         die('You cannot perform this action on your own account.');
+    }
+
+    if ($action === 'issue_bypass') {
+        $reason = trim((string)($_POST['reason'] ?? ''));
+        $durationHours = max(1, min(4, (int)($_POST['duration_hours'] ?? 4)));
+
+        if (strlen($reason) < 10) {
+            http_response_code(400);
+            die('A detailed reason of at least 10 characters is required.');
+        }
+
+        $targetUser = $db->fetchOne(
+            'SELECT id, email, display_name, role, mfa_enrolled, mfa_factor, deleted_at
+             FROM users
+             WHERE id = ? AND deleted_at IS NULL',
+            [$targetId]
+        );
+
+        if (!$targetUser) {
+            http_response_code(404);
+            die('User not found.');
+        }
+
+        $hierarchy = ['user' => 1, 'manager' => 2, 'admin' => 3, 'superadmin' => 4];
+        $currentRole = $currentUser['role'] ?? 'user';
+        if (($hierarchy[$targetUser['role']] ?? 0) >= ($hierarchy[$currentRole] ?? 0) && $currentRole !== 'superadmin') {
+            http_response_code(403);
+            die('You cannot issue a bypass token for a user with equal or higher privileges.');
+        }
+
+        $bypassToken = bin2hex(random_bytes(32));
+        $bypassTokenHash = hash('sha256', $bypassToken);
+        $expiresAt = date('Y-m-d H:i:s', time() + ($durationHours * 3600));
+
+        $db->execute(
+            'UPDATE users
+             SET mfa_bypass_token = ?, mfa_bypass_expiry = ?
+             WHERE id = ?',
+            [$bypassTokenHash, $expiresAt, $targetId]
+        );
+
+        try {
+            $dbConfig = require __DIR__ . '/backend/config/database.php';
+            $redis = new Redis();
+            $redis->connect($dbConfig['redis']['host'], (int)$dbConfig['redis']['port']);
+            if (!empty($dbConfig['redis']['pass'])) {
+                $redis->auth($dbConfig['redis']['pass']);
+            }
+            $redis->setex("saips:mfa_bypass:{$bypassTokenHash}", $durationHours * 3600, json_encode([
+                'user_id' => $targetId,
+                'admin_id' => $currentUser['sub'],
+                'reason' => $reason,
+                'expires_at' => $expiresAt,
+            ], JSON_UNESCAPED_SLASHES));
+        } catch (Throwable $e) {
+            error_log('[SAIPS] Redis store failed for MFA bypass token: ' . $e->getMessage());
+        }
+
+        if (class_exists('SAIPS\\Middleware\\AuditMiddleware')) {
+            \SAIPS\Middleware\AuditMiddleware::init(get_audit_pdo());
+            \SAIPS\Middleware\AuditMiddleware::mfaBypassIssued($targetId, $currentUser['sub'], $reason);
+        }
+
+        $_SESSION['flash_mfa_bypass'] = [
+            'user_id' => $targetUser['id'],
+            'display_name' => $targetUser['display_name'],
+            'email' => $targetUser['email'],
+            'token' => $bypassToken,
+            'expires_at' => $expiresAt,
+            'duration_hours' => $durationHours,
+            'reason' => $reason,
+        ];
+
+        unset($_SESSION['csrf_token']);
+        header('Location: users.php?status=' . urlencode($status) . '&search=' . urlencode($search) . '&page=' . $page);
+        exit;
     }
 
     if ($action === 'lock') {
@@ -109,6 +279,42 @@ $users = $paginated['items'];
                     <i class="ri-user-add-line me-1"></i>Add User
                 </button>
             </div>
+
+            <?php if ($flashBypass): ?>
+            <div class="alert alert-warning d-flex flex-column gap-2 mb-4" role="alert">
+                <div class="d-flex align-items-start gap-2">
+                    <i class="ri-key-2-line fs-4 flex-shrink-0"></i>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">MFA bypass token issued for <?= esc($flashBypass['display_name']) ?>.</div>
+                        <div class="small text-muted"><?= esc($flashBypass['email']) ?> · Expires <?= esc($flashBypass['expires_at']) ?></div>
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label fs-12 text-muted mb-1">Share this token securely. It will only be shown once.</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-sm" id="issued-bypass-token" value="<?= esc($flashBypass['token']) ?>" readonly>
+                        <button type="button" class="btn btn-sm btn-warning" id="copy-bypass-token">
+                            <i class="ri-file-copy-line me-1"></i>Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($flashUser): ?>
+            <div class="alert alert-success d-flex flex-column gap-2 mb-4" role="alert">
+                <div class="d-flex gap-2">
+                    <i class="ri-checkbox-circle-line flex-shrink-0"></i>
+                    <span>
+                        User created: <strong><?= esc($flashUser['display_name']) ?></strong>
+                        (<?= esc($flashUser['email']) ?>) as <?= esc($flashUser['role']) ?> with <?= esc($flashUser['status']) ?> status.
+                    </span>
+                </div>
+                <div class="small">
+                    Default password: <code><?= esc($flashUser['default_password'] ?? '') ?></code>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <!-- Stats — CAP512 Unit 5: array iteration -->
             <div class="row g-3 mb-4">
@@ -228,6 +434,14 @@ $users = $paginated['items'];
                                                     onclick="location.href='audit-log.php?user_id=<?= esc($u['id']) ?>'">
                                                 <i class="ri-file-search-line"></i>
                                             </button>
+                                            <button type="button"
+                                                    class="btn btn-light-info border-info icon-btn-sm js-issue-bypass"
+                                                    title="Issue MFA Bypass Token"
+                                                    data-user-id="<?= esc($u['id']) ?>"
+                                                    data-user-name="<?= esc($u['display_name']) ?>"
+                                                    data-user-email="<?= esc($u['email']) ?>">
+                                                <i class="ri-key-2-line"></i>
+                                            </button>
                                             <?php if ($u['status'] === 'locked' || $u['status'] === 'suspended'): ?>
                                             <form method="POST" class="d-inline">
                                                 <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
@@ -280,14 +494,130 @@ $users = $paginated['items'];
         </div>
     </main>
 
+    <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                    <input type="hidden" name="action" value="create_user">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addUserModalLabel">Add User</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Display Name</label>
+                            <input type="text" name="display_name" class="form-control" maxlength="120" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" name="email" class="form-control" maxlength="254" required>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Role</label>
+                                <select name="role" class="form-select">
+                                    <option value="user">User</option>
+                                    <option value="manager">Manager</option>
+                                    <?php if (($user['role'] ?? '') === 'superadmin'): ?>
+                                    <option value="admin">Admin</option>
+                                    <option value="superadmin">Superadmin</option>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Status</label>
+                                <select name="status" class="form-select">
+                                    <option value="pending">Pending</option>
+                                    <option value="active">Active</option>
+                                    <option value="locked">Locked</option>
+                                    <option value="suspended">Suspended</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="ri-user-add-line me-1"></i>Create User
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="assets/js/sidebar.js"></script>
     <script src="assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="assets/libs/simplebar/simplebar.min.js"></script>
     <script src="assets/libs/sweetalert2/sweetalert2.min.js"></script>
     <script src="assets/js/pages/scroll-top.init.js"></script>
     <script src="assets/js/app.js" type="module"></script>
+    <form method="POST" id="issue-bypass-form" class="d-none">
+        <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+        <input type="hidden" name="action" value="issue_bypass">
+        <input type="hidden" name="user_id" id="issue-bypass-user-id">
+        <input type="hidden" name="reason" id="issue-bypass-reason">
+        <input type="hidden" name="duration_hours" id="issue-bypass-duration" value="4">
+    </form>
     <script>
     document.querySelectorAll('[title]').forEach(el => new bootstrap.Tooltip(el, {trigger:'hover'}));
+
+    document.querySelectorAll('.js-issue-bypass').forEach(button => {
+        button.addEventListener('click', async () => {
+            const name = button.dataset.userName || 'this user';
+            const email = button.dataset.userEmail || '';
+            const result = await Swal.fire({
+                title: 'Issue MFA bypass token?',
+                html: `
+                    <p class="text-muted mb-3">Create a single-use recovery token for <strong>${name}</strong>${email ? ` (${email})` : ''}.</p>
+                    <textarea id="swal-bypass-reason" class="swal2-textarea" placeholder="Reason for account recovery" rows="3"></textarea>
+                    <select id="swal-bypass-duration" class="swal2-select">
+                        <option value="1">1 hour</option>
+                        <option value="2">2 hours</option>
+                        <option value="4" selected>4 hours</option>
+                    </select>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Issue token',
+                focusConfirm: false,
+                preConfirm: () => {
+                    const reason = document.getElementById('swal-bypass-reason').value.trim();
+                    const duration = document.getElementById('swal-bypass-duration').value;
+                    if (reason.length < 10) {
+                        Swal.showValidationMessage('Enter a recovery reason of at least 10 characters.');
+                        return false;
+                    }
+                    return { reason, duration };
+                }
+            });
+
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            document.getElementById('issue-bypass-user-id').value = button.dataset.userId;
+            document.getElementById('issue-bypass-reason').value = result.value.reason;
+            document.getElementById('issue-bypass-duration').value = result.value.duration;
+            document.getElementById('issue-bypass-form').submit();
+        });
+    });
+
+    const copyButton = document.getElementById('copy-bypass-token');
+    if (copyButton) {
+        copyButton.addEventListener('click', async () => {
+            const input = document.getElementById('issued-bypass-token');
+            try {
+                await navigator.clipboard.writeText(input.value);
+                copyButton.innerHTML = '<i class="ri-check-line me-1"></i>Copied';
+            } catch (err) {
+                input.select();
+                document.execCommand('copy');
+                copyButton.innerHTML = '<i class="ri-check-line me-1"></i>Copied';
+            }
+        });
+    }
     </script>
 </body>
 </html>

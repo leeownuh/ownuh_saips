@@ -10,18 +10,18 @@ $db   = Database::getInstance();
 
 // CAP512 Unit 7: Complex query — aggregate login attempts by IP
 $bruteAttempts = $db->fetchAll(
-    'SELECT la.ip_address, la.user_id, u.email, u.display_name,
+    'SELECT la.ip_address, la.username, u.email, u.display_name,
             COUNT(*) as total_failures,
             MAX(la.attempted_at) as last_attempt,
             MIN(la.attempted_at) as first_attempt,
             TIMESTAMPDIFF(MINUTE, MIN(la.attempted_at), MAX(la.attempted_at)) as window_minutes,
             b.id as block_id
      FROM login_attempts la
-     LEFT JOIN users u ON u.id = la.user_id
+     LEFT JOIN users u ON u.email = la.username
      LEFT JOIN blocked_ips b ON b.ip_address = la.ip_address AND b.unblocked_at IS NULL
      WHERE la.attempted_at >= NOW() - INTERVAL 24 HOUR
        AND la.success = 0
-     GROUP BY la.ip_address, la.user_id
+     GROUP BY la.ip_address, la.username, u.email, u.display_name, b.id
      HAVING total_failures >= 3
      ORDER BY total_failures DESC
      LIMIT 50'

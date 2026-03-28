@@ -24,18 +24,20 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\setup_windows.ps1
 ```
 
+Default behavior:
+
+- creates both MySQL databases
+- imports `database/schema.sql`
+- imports `database/migrations/002_credentials.sql`
+- imports `database/portfolio_seed.sql`
+- generates JWT keys
+- writes `backend/config/.env`
+
 #### Batch
 
 ```bat
 cd C:\xampp\htdocs\ownuh_saips_fixed
 setup_windows.bat
-```
-
-#### Manual PHP
-
-```bat
-cd C:\xampp\htdocs\ownuh_saips_fixed
-php setup.php
 ```
 
 ### 4. Start the server
@@ -62,10 +64,37 @@ http://localhost/ownuh_saips_fixed/login.php
 
 | Email | Password | Role |
 |---|---|---|
+| `lucia.alvarez@acme.com` | `Admin@SAIPS2025!` | Admin |
 | `sophia.johnson@acme.com` | `Admin@SAIPS2025!` | Super Admin |
 | `marcus.chen@acme.com` | `Admin@SAIPS2025!` | Admin |
 
 Change the default password immediately after first login.
+
+`lucia.alvarez@acme.com` is the best primary demo login because the portfolio dataset is shaped for a clean admin walkthrough.
+
+---
+
+## Linux
+
+```bash
+git clone https://github.com/YOUR_USERNAME/ownuh-saips.git
+cd ownuh-saips
+bash install.sh
+```
+
+Default behavior:
+
+- creates both MySQL databases
+- imports schema plus credentials schema
+- imports `database/portfolio_seed.sql`
+- generates JWT keys
+- writes `backend/config/.env`
+
+Then start the app with:
+
+```bash
+php -S 0.0.0.0:8080
+```
 
 ---
 
@@ -127,7 +156,7 @@ APP_TIMEZONE_LABEL=IST
 | Symptom | Fix |
 |---|---|
 | White page / maintenance page | Start MySQL from XAMPP |
-| Login fails after setup | Re-run `php setup.php` |
+| Login fails after setup | Re-run `setup_windows.ps1` or `install.sh` |
 | Reset link fails | Check `C:\xampp\apache\logs\error.log` and confirm `APP_URL` / path |
 | Session not persisting through ngrok | Set `TRUSTED_PROXY=any` and `COOKIE_SAMESITE=Lax` |
 | Password change says network error | Ensure the real page is `auth-create-password.php`, not the stale static mockup |

@@ -76,9 +76,9 @@ $blocked = get_blocked_ips(200);
 $byType = array_group_by($blocked, 'block_type');
 $stats  = $db->fetchOne(
     'SELECT COUNT(*) as total,
-            SUM(block_type="auto")       as auto_blocked,
+            SUM(block_type="brute_force") as brute_force,
             SUM(block_type="manual")     as manual,
-            SUM(block_type="geo")        as geo,
+            SUM(block_type="geo_block")  as geo,
             SUM(block_type="threat_feed") as feed
      FROM blocked_ips WHERE unblocked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())'
 );
@@ -88,7 +88,7 @@ $stats  = $db->fetchOne(
                 <?php
                 $sc = [
                     ['v'=>$stats['total'],        'l'=>'Total Blocked',    'c'=>'danger'],
-                    ['v'=>$stats['auto_blocked'],  'l'=>'Auto-Blocked',     'c'=>'warning'],
+                    ['v'=>$stats['brute_force'],   'l'=>'Brute-Force',      'c'=>'warning'],
                     ['v'=>$stats['manual'],        'l'=>'Manual Blocks',    'c'=>'primary'],
                     ['v'=>$stats['feed'],          'l'=>'Threat Feed',      'c'=>'info'],
                 ];
@@ -118,10 +118,11 @@ $stats  = $db->fetchOne(
                             <?php else: ?>
                             <?php foreach ($blocked as $b):
                                 $typeClass = match($b['block_type']) {
-                                    'auto'       => 'bg-warning-subtle text-warning border border-warning',
+                                    'brute_force'=> 'bg-warning-subtle text-warning border border-warning',
                                     'manual'     => 'bg-primary-subtle text-primary border border-primary',
-                                    'geo'        => 'bg-info-subtle text-info border border-info',
+                                    'geo_block'  => 'bg-info-subtle text-info border border-info',
                                     'threat_feed'=> 'bg-danger-subtle text-danger border border-danger',
+                                    'tor_exit'   => 'bg-dark-subtle text-dark border border-dark',
                                     default      => 'bg-secondary-subtle text-secondary',
                                 };
                                 $permanent = empty($b['expires_at']);

@@ -155,6 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
                         $_SESSION['mfa_otp']         = password_hash($otp, PASSWORD_BCRYPT, ['cost' => 10]);
                         $_SESSION['mfa_otp_expires'] = time() + 600; // 10 min
+                        log_dev_otp($user['email'], $otp);
                         // In production: send via email. Log for dev:
                         // SECURITY: OTP must be dispatched via EmailService — never log credentials
                     }
@@ -175,10 +176,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     0
                 );
                 $token = create_jwt_token([
-                    'id'    => $user['id'],
-                    'email' => $user['email'],
-                    'role'  => $user['role'],
-                ]);
+    'sub'   => $user['id'], // 🔴 REQUIRED for your middleware
+    'id'    => $user['id'], // keep for compatibility
+    'email' => $user['email'],
+    'role'  => $user['role'],
+]);
                 set_auth_cookies($token);
 
                 // Record session in DB so active_sessions dashboard KPI is accurate
@@ -201,13 +203,32 @@ $csrf = csrf_token();
 function _insert_session(Database $db, string $userId, string $ip): void {
     try {
         $sessionId   = bin2hex(random_bytes(16));
-        $refreshHash = hash('sha256', bin2hex(random_bytes(32)));
+        $refreshToken = bin2hex(random_bytes(32));
+$refreshHash  = hash('sha256', $refreshToken);
         $expires     = date('Y-m-d H:i:s', time() + 900); // match JWT TTL
-        $db->execute(
-            'INSERT INTO sessions (id, user_id, refresh_token_hash, ip_address, created_at, expires_at)
-             VALUES (?, ?, ?, ?, NOW(), ?)',
-            [$sessionId, $userId, $refreshHash, $ip, $expires]
-        );
+       $db->execute(
+    'INSERT INTO sessions (
+        id, user_id, refresh_token_hash, ip_address,
+        created_at, expires_at, last_used_at
+    )
+    VALUES (?, ?, ?, ?, NOW(), ?, NOW())',
+    [$sessionId, $userId, $refreshHash, $ip, $expires]
+);
+        try {
+    $redis = new Redis();
+    $redis->connect('127.0.0.1', 6379);
+
+    $redis->setex(
+        "saips:session:$refreshHash",
+        900, // match expiry
+        json_encode([
+            'user_id' => $userId,
+            'ip'      => $ip
+        ])
+    );
+} catch (Throwable $e) {
+    error_log('[SAIPS] Redis session store failed: ' . $e->getMessage());
+}
     } catch (Throwable $e) {
         // Non-fatal — session KPI may lag but auth still works
         error_log('[SAIPS] Session insert failed: ' . $e->getMessage());
@@ -242,7 +263,7 @@ function _insert_session(Database $db, string $userId, string $ip): void {
                         <!-- Left panel: carousel -->
                         <div class="col-lg-6 d-none d-lg-block p-0">
                             <div class="bg-login card card-body m-0 h-100 border-0">
-                                <img src="assets/images/auth/bg-img-2.png" class="img-fluid auth-banner" alt="">
+                                <img src="assets/images/auth/bg-img-2.jpg" class="img-fluid auth-banner" alt="">
                                 <div class="auth-contain">
                                     <div id="loginCarousel" class="carousel slide" data-bs-ride="carousel">
                                         <div class="carousel-indicators">
@@ -344,7 +365,7 @@ function _insert_session(Database $db, string $userId, string $ip): void {
                                             </div>
                                         </div>
                                         <div class="col-sm-6 text-end">
-                                            <a href="login.php?forgot=1" class="fs-14 text-muted">Forgot password?</a>
+                                            <a href="forgot-password.php" class="fs-14 text-muted">Forgot password?</a>
                                         </div>
                                     </div>
 

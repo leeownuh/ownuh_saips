@@ -54,6 +54,7 @@ class IpCheckMiddleware
         // 4. Geo-block check
         $country = $this->getCountryCode($ip);
         if ($country && $this->isGeoBlocked($country)) {
+            $this->blockIp($ip, 'geo_block', "Geo rule: {$country}", 60);
             // Log to audit but give no indication why to the user
             $this->logGeoBlock($ip, $country);
             $this->abortGeneric();
@@ -119,7 +120,7 @@ class IpCheckMiddleware
 
     private function isGeoBlocked(string $country): bool
     {
-        $key    = "saips:geo_deny:{$country}";
+        $key    = "saips:geo:{$country}";
         $cached = $this->redis->get($key);
         if ($cached !== false) {
             return (bool)$cached;
@@ -163,11 +164,11 @@ class IpCheckMiddleware
 
     private function logGeoBlock(string $ip, string $country): void
     {
-        $stmt = $this->db->prepare(
-            'CALL sp_insert_audit_log("IPS-003","Geo-Block Triggered",NULL,?,NULL,?,NULL,80,?,NULL,NULL)'
-        );
-        $details = json_encode(['country' => $country, 'requested_resource' => $_SERVER['REQUEST_URI'] ?? '']);
-        $stmt->execute([$ip, $country, $details]);
+        AuditMiddleware::init($this->db);
+        AuditMiddleware::log('IPS-003', 'Geo-Block Triggered', null, $ip, null, $country, null, 80, [
+            'country' => $country,
+            'requested_resource' => $_SERVER['REQUEST_URI'] ?? '',
+        ]);
     }
 
     /**

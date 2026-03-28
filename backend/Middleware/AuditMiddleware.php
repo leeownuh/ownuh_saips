@@ -44,7 +44,7 @@ class AuditMiddleware
         ?string $countryCode = null,
         ?string $mfaMethod   = null,
         ?int    $riskScore   = null,
-        ?array  $details     = null,
+        array|string|null $details = null,
         ?string $adminId     = null,
         ?string $targetUserId = null
     ): void {
@@ -54,6 +54,10 @@ class AuditMiddleware
         }
 
         try {
+            $resolvedSourceIp = $sourceIp ?? self::getClientIp();
+            $resolvedUserAgent = $userAgent ?? ($_SERVER['HTTP_USER_AGENT'] ?? null);
+            $normalizedDetails = self::normalizeDetails($details);
+
             $stmt = self::$db->prepare(
                 'CALL sp_insert_audit_log(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
@@ -61,15 +65,43 @@ class AuditMiddleware
                 $eventCode,
                 $eventName,
                 $userId,
-                $sourceIp    ?? self::getClientIp(),
-                $userAgent   ?? ($_SERVER['HTTP_USER_AGENT'] ?? null),
+                $resolvedSourceIp,
+                $resolvedUserAgent,
                 $countryCode,
                 $mfaMethod,
                 $riskScore,
-                $details ? json_encode($details) : null,
+                $normalizedDetails,
                 $adminId,
                 $targetUserId,
             ]);
+        } catch (\PDOException $e) {
+            if (self::isMissingProcedureError($e)) {
+                try {
+                    self::insertDirectly(
+                        $eventCode,
+                        $eventName,
+                        $userId,
+                        $resolvedSourceIp ?? $sourceIp ?? self::getClientIp(),
+                        $resolvedUserAgent ?? $userAgent ?? ($_SERVER['HTTP_USER_AGENT'] ?? null),
+                        $countryCode,
+                        $mfaMethod,
+                        $riskScore,
+                        $normalizedDetails ?? self::normalizeDetails($details),
+                        $adminId,
+                        $targetUserId
+                    );
+                    return;
+                } catch (\Throwable $fallbackError) {
+                    error_log('[SAIPS Audit CRITICAL] Failed stored procedure and direct fallback: '
+                        . $fallbackError->getMessage()
+                        . ' | Event: ' . $eventCode
+                        . ' | User: ' . ($userId ?? 'null'));
+                    return;
+                }
+            }
+
+            error_log('[SAIPS Audit CRITICAL] Failed to write audit entry: ' . $e->getMessage()
+                . ' | Event: ' . $eventCode . ' | User: ' . ($userId ?? 'null'));
         } catch (\Throwable $e) {
             // Audit failures must not break the request, but MUST be logged to file
             error_log('[SAIPS Audit CRITICAL] Failed to write audit entry: ' . $e->getMessage()
@@ -250,17 +282,102 @@ class AuditMiddleware
         ], $adminId, $targetUserId);
     }
 
+    private static function normalizeDetails(array|string|null $details): ?string
+    {
+        if ($details === null) {
+            return null;
+        }
+
+        if (is_string($details)) {
+            json_decode($details);
+            return json_last_error() === JSON_ERROR_NONE
+                ? $details
+                : json_encode(['message' => $details], JSON_UNESCAPED_SLASHES);
+        }
+
+        return json_encode($details, JSON_UNESCAPED_SLASHES);
+    }
+
+    private static function isMissingProcedureError(\PDOException $e): bool
+    {
+        $errorInfo = $e->errorInfo;
+        $driverCode = is_array($errorInfo) ? (int)($errorInfo[1] ?? 0) : 0;
+
+        return $e->getCode() === '42000'
+            && $driverCode === 1305
+            && str_contains($e->getMessage(), 'sp_insert_audit_log');
+    }
+
+    private static function insertDirectly(
+        string $eventCode,
+        string $eventName,
+        ?string $userId,
+        ?string $sourceIp,
+        ?string $userAgent,
+        ?string $countryCode,
+        ?string $mfaMethod,
+        ?int $riskScore,
+        ?string $detailsJson,
+        ?string $adminId,
+        ?string $targetUserId
+    ): void {
+        $previousHashStmt = self::$db->query('SELECT entry_hash FROM audit_log ORDER BY id DESC LIMIT 1');
+        $previousHash = $previousHashStmt ? $previousHashStmt->fetchColumn() : null;
+        $createdAt = self::$db->query('SELECT DATE_FORMAT(NOW(3), "%Y-%m-%d %H:%i:%s.%f")')->fetchColumn();
+
+        $entryHash = hash('sha256', implode('|', [
+            $previousHash ?: 'GENESIS',
+            $eventCode,
+            $userId ?? '',
+            $createdAt,
+            $detailsJson ?? '',
+        ]));
+
+        $stmt = self::$db->prepare(
+            'INSERT INTO audit_log (
+                event_code, event_name, user_id, source_ip, user_agent,
+                country_code, mfa_method, risk_score, details,
+                admin_id, target_user_id, entry_hash, prev_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $eventCode,
+            $eventName,
+            $userId,
+            $sourceIp,
+            $userAgent,
+            $countryCode,
+            $mfaMethod,
+            $riskScore,
+            $detailsJson,
+            $adminId,
+            $targetUserId,
+            $entryHash,
+            $previousHash ?: null,
+        ]);
+    }
+
     private static function getClientIp(): string
     {
-        // Prefer real IP if behind a trusted proxy
-        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'] as $key) {
-            if (!empty($_SERVER[$key])) {
-                $ip = trim(explode(',', $_SERVER[$key])[0]);
-                if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                    return $ip;
+        $remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
+        $trustedProxy = $_ENV['TRUSTED_PROXY'] ?? '';
+        $proxyTrusted = $trustedProxy !== ''
+                     && ($trustedProxy === 'any' || $remoteAddr === $trustedProxy);
+
+        // Only read forwarded-IP headers when request comes from a trusted proxy.
+        // Accepting these headers unconditionally allows clients to spoof their IP
+        // address in audit logs, defeating rate-limiting and geo-blocking.
+        if ($proxyTrusted) {
+            foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR'] as $key) {
+                if (!empty($_SERVER[$key])) {
+                    $ip = trim(explode(',', $_SERVER[$key])[0]);
+                    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                        return $ip;
+                    }
                 }
             }
         }
-        return '0.0.0.0';
+
+        return filter_var($remoteAddr, FILTER_VALIDATE_IP) ? $remoteAddr : '0.0.0.0';
     }
 }

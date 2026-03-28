@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", function () {
             stroke: { show: true, width: 2, colors: ["transparent"] },
             xaxis: { categories: ["Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"] },
             yaxis: { title: { text: "Events" } },
-            colors: ["#0d6efd", "#ffc107", "#dc3545"],
+            colors: ["#9c2fba", "#ffc107", "#dc3545"],
             fill: { opacity: 1 },
             tooltip: { y: { formatter: function (val) { return val + " events"; } } },
             legend: { position: "bottom" }

@@ -1,26 +1,29 @@
-# Environment & secrets
+# ── Secrets — NEVER commit these ─────────────────────────────
 backend/config/.env
 keys/private.pem
 keys/public.pem
+keys/htdocs.lnk
 
-# Debug files
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/*.log
+/var/log/
+
+# ── Debug / temp files ───────────────────────────────────────
+debug.php
 debug_*.php
 summarized_conversations/
+*.swp
+*.swo
 
-# OS / IDE
+# ── OS / IDE ─────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
-*.swp
-*.swo
 
-# Logs
-*.log
-/var/log/
+# ── PHP vendor is committed for portability (no composer needed on server) ──
+# vendor/   ← intentionally kept
 
-# PHP vendor (committed in this repo for portability)
-# vendor/   ← intentionally kept committed
-
-# Compiled assets (kept as-is)
-# assets/   ← intentionally kept committed
+# ── Compiled assets kept as-is ───────────────────────────────
+# assets/   ← intentionally kept

@@ -1,95 +1,100 @@
 #!/usr/bin/env bash
-# ============================================================
-# Ownuh SAIPS — One-Command Install Script
-# Tested on Ubuntu 22.04 / 24.04 with Apache2 + PHP 8.2+
-# Usage:  bash install.sh
-# ============================================================
 set -euo pipefail
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
-ok()   { echo -e "${GREEN}  ✓ $*${NC}"; }
-warn() { echo -e "${YELLOW}  ⚠ $*${NC}"; }
-err()  { echo -e "${RED}  ✗ $*${NC}"; exit 1; }
-info() { echo -e "${BLUE}  → $*${NC}"; }
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+ok()   { echo -e "${GREEN}  [OK]  $*${NC}"; }
+info() { echo -e "${BLUE}  [...] $*${NC}"; }
+warn() { echo -e "${YELLOW}  [WRN] $*${NC}"; }
+err()  { echo -e "${RED}  [ERR] $*${NC}"; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo ""
-echo "============================================================"
-echo "  Ownuh SAIPS — Installation"
-echo "============================================================"
-echo ""
-
-# ── 1. Check PHP ─────────────────────────────────────────────
-info "Checking PHP..."
-if ! command -v php &>/dev/null; then
-    err "PHP not found. Install: sudo apt install php php-mysqli php-mbstring php-openssl php-gd php-json"
-fi
-PHP_VER=$(php -r "echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;")
-info "PHP $PHP_VER found"
-for ext in mysqli openssl gd mbstring json; do
-    php -m | grep -qi "^$ext$" && ok "$ext extension" || warn "PHP $ext extension missing — some features may fail"
-done
-
-# ── 2. Check MySQL ────────────────────────────────────────────
-info "Checking MySQL..."
-if ! command -v mysql &>/dev/null; then
-    err "MySQL client not found. Install: sudo apt install mysql-server"
-fi
-
-# Get MySQL credentials
-read -p "  MySQL host [127.0.0.1]: " DB_HOST; DB_HOST="${DB_HOST:-127.0.0.1}"
-read -p "  MySQL user [root]: "      DB_USER; DB_USER="${DB_USER:-root}"
-read -sp "  MySQL password [empty]: " DB_PASS; echo
+SEED_MODE="${SEED_MODE:-portfolio}"
+APP_URL="${APP_URL:-http://localhost}"
+DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-3306}"
+DB_USER="${DB_USER:-root}"
+DB_PASS="${DB_PASS:-}"
 
-# Test connection
-mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -e "SELECT 1;" &>/dev/null \
-    || err "Cannot connect to MySQL. Check credentials."
-ok "MySQL connected"
+case "$SEED_MODE" in
+    portfolio) SEED_FILE="$SCRIPT_DIR/database/portfolio_seed.sql" ;;
+    dev)       SEED_FILE="$SCRIPT_DIR/database/seed.sql" ;;
+    test)      SEED_FILE="$SCRIPT_DIR/database/test_seed.sql" ;;
+    *)         err "Unsupported SEED_MODE '$SEED_MODE'. Use portfolio, dev, or test." ;;
+esac
 
-# ── 3. Create databases ───────────────────────────────────────
+echo ""
+echo "============================================================"
+echo "  Ownuh SAIPS Linux Setup"
+echo "============================================================"
+echo ""
+
+[[ -f "$SCRIPT_DIR/login.php" ]] || err "Run this script from the project root."
+command -v php >/dev/null 2>&1 || err "PHP CLI is required."
+command -v mysql >/dev/null 2>&1 || err "MySQL client is required."
+command -v openssl >/dev/null 2>&1 || err "OpenSSL is required."
+
+info "Using seed: $(basename "$SEED_FILE")"
+info "Project root: $SCRIPT_DIR"
+
+if [[ -z "$DB_PASS" ]]; then
+    read -r -p "  MySQL host [$DB_HOST]: " input_host
+    DB_HOST="${input_host:-$DB_HOST}"
+    read -r -p "  MySQL port [$DB_PORT]: " input_port
+    DB_PORT="${input_port:-$DB_PORT}"
+    read -r -p "  MySQL user [$DB_USER]: " input_user
+    DB_USER="${input_user:-$DB_USER}"
+    read -r -s -p "  MySQL password [blank]: " DB_PASS
+    echo
+fi
+
+MYSQL_ARGS=(-h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" --default-character-set=utf8mb4)
+if [[ -n "$DB_PASS" ]]; then
+    MYSQL_ARGS+=(-p"$DB_PASS")
+fi
+
+info "Testing MySQL connection..."
+mysql "${MYSQL_ARGS[@]}" -e "SELECT 1;" >/dev/null || err "Could not connect to MySQL."
+ok "MySQL connection verified"
+
 info "Creating databases..."
-mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" ${DB_PASS:+-p"$DB_PASS"} << SQL
-CREATE DATABASE IF NOT EXISTS ownuh_saips      CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+mysql "${MYSQL_ARGS[@]}" <<'SQL'
+CREATE DATABASE IF NOT EXISTS ownuh_saips CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS ownuh_credentials CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 SQL
-ok "Databases created (ownuh_saips, ownuh_credentials)"
+ok "Databases ready"
 
-# ── 4. Run schema ─────────────────────────────────────────────
 info "Importing schema..."
-mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" ${DB_PASS:+-p"$DB_PASS"} ownuh_saips \
-    < "$SCRIPT_DIR/database/schema.sql"
-ok "Main schema imported"
+mysql "${MYSQL_ARGS[@]}" < "$SCRIPT_DIR/database/schema.sql"
+mysql "${MYSQL_ARGS[@]}" < "$SCRIPT_DIR/database/migrations/002_credentials.sql"
+mysql "${MYSQL_ARGS[@]}" < "$SCRIPT_DIR/database/migrations/003_password_resets_unify.sql"
+ok "Schema import complete"
 
-mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" ${DB_PASS:+-p"$DB_PASS"} \
-    < "$SCRIPT_DIR/database/migrations/002_credentials.sql"
-ok "Credentials schema imported"
+info "Importing seed..."
+mysql "${MYSQL_ARGS[@]}" < "$SEED_FILE"
+ok "Seed import complete"
 
-# ── 5. Run seed ───────────────────────────────────────────────
-info "Seeding sample data..."
-mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" ${DB_PASS:+-p"$DB_PASS"} ownuh_saips \
-    < "$SCRIPT_DIR/database/seed.sql" 2>/dev/null || warn "Seed skipped (data may already exist)"
-ok "Seed data applied"
-
-# ── 6. Generate JWT keys ──────────────────────────────────────
-info "Generating RSA-2048 JWT key pair..."
 KEY_DIR="$SCRIPT_DIR/keys"
 mkdir -p "$KEY_DIR"
-if [[ ! -f "$KEY_DIR/private.pem" ]]; then
-    openssl genrsa -out "$KEY_DIR/private.pem" 2048 2>/dev/null
-    openssl rsa -in "$KEY_DIR/private.pem" -pubout -out "$KEY_DIR/public.pem" 2>/dev/null
+
+info "Generating JWT keys..."
+if [[ ! -f "$KEY_DIR/private.pem" || ! -f "$KEY_DIR/public.pem" ]]; then
+    openssl genrsa -out "$KEY_DIR/private.pem" 2048 >/dev/null 2>&1
+    openssl rsa -in "$KEY_DIR/private.pem" -pubout -out "$KEY_DIR/public.pem" >/dev/null 2>&1
     chmod 600 "$KEY_DIR/private.pem"
-    ok "JWT keys generated at keys/"
+    chmod 644 "$KEY_DIR/public.pem"
+    ok "JWT keys generated"
 else
     ok "JWT keys already exist"
 fi
 
-# ── 7. Write .env ─────────────────────────────────────────────
-info "Writing backend/config/.env..."
 ENV_FILE="$SCRIPT_DIR/backend/config/.env"
-cat > "$ENV_FILE" << ENV
-# Generated by install.sh on $(date)
+info "Writing backend/config/.env..."
+cat > "$ENV_FILE" <<ENV
 DB_HOST=$DB_HOST
 DB_PORT=$DB_PORT
 DB_NAME=ownuh_saips
@@ -98,6 +103,7 @@ DB_PASS=$DB_PASS
 
 DB_AUTH_HOST=$DB_HOST
 DB_AUTH_PORT=$DB_PORT
+DB_AUTH_NAME=ownuh_credentials
 DB_AUTH_USER=$DB_USER
 DB_AUTH_PASS=$DB_PASS
 
@@ -113,8 +119,13 @@ JWT_REFRESH_TTL=604800
 JWT_ADMIN_REFRESH_TTL=28800
 
 APP_ENV=development
-APP_URL=http://localhost
+APP_URL=$APP_URL
+APP_TIMEZONE=Asia/Kolkata
+APP_TIMEZONE_LABEL=IST
+
 BCRYPT_COST=12
+TRUSTED_PROXY=
+COOKIE_SAMESITE=
 
 MFA_TOTP_ISSUER=OwnuhSAIPS
 MFA_EMAIL_OTP_TTL=600
@@ -123,43 +134,28 @@ ENV
 chmod 600 "$ENV_FILE"
 ok ".env written"
 
-# ── 8. Generate bcrypt hashes for seed users ──────────────────
-info "Hashing seed user passwords (bcrypt cost 12) — this takes ~10s..."
-php "$SCRIPT_DIR/setup.php" 2>/dev/null | grep -E "✓|✗|==="
-ok "Seed credentials inserted"
+info "Verifying install counts..."
+mysql "${MYSQL_ARGS[@]}" -e "
+SELECT COUNT(*) AS users FROM ownuh_saips.users;
+SELECT COUNT(*) AS sessions FROM ownuh_saips.sessions WHERE invalidated_at IS NULL AND expires_at > NOW();
+SELECT COUNT(*) AS incidents FROM ownuh_saips.incidents;
+SELECT COUNT(*) AS audit_entries FROM ownuh_saips.audit_log;
+"
+ok "Verification queries completed"
 
-# ── 9. Set file permissions ───────────────────────────────────
-info "Setting file permissions..."
-find "$SCRIPT_DIR" -type f -name "*.php" -exec chmod 644 {} \;
-find "$SCRIPT_DIR" -type d              -exec chmod 755 {} \;
-chmod 600 "$KEY_DIR/private.pem"
-chmod 644 "$KEY_DIR/public.pem"
-chmod 600 "$ENV_FILE"
-ok "Permissions set"
-
-# ── 10. Detect web server & document root ─────────────────────
 echo ""
 echo "============================================================"
-echo -e "${GREEN}  Installation complete!${NC}"
+echo "  Setup complete"
 echo "============================================================"
 echo ""
-echo "  Default login:"
-echo -e "  ${BLUE}Email:    sophia.johnson@acme.com${NC}"
-echo -e "  ${BLUE}Password: Admin@SAIPS2025!${NC}"
+echo "Seed mode : $SEED_MODE"
+echo "App URL   : $APP_URL"
+echo "Login URL : $APP_URL/login.php"
 echo ""
-echo "  Point your web server document root to:"
-echo -e "  ${YELLOW}$SCRIPT_DIR${NC}"
+echo "Primary demo account:"
+echo "  Email    : lucia.alvarez@acme.com"
+echo "  Password : Admin@SAIPS2025!"
 echo ""
-echo "  Apache quick-start (if installed):"
-echo "    sudo ln -sf $SCRIPT_DIR /var/www/ownuh-saips"
-echo "    sudo bash $SCRIPT_DIR/setup_apache.sh"
-echo ""
-echo "  PHP built-in server (dev only):"
-echo "    cd $SCRIPT_DIR && php -S 0.0.0.0:8080"
-echo ""
-echo "  ngrok tunnel:"
-echo "    ngrok http 8080"
-echo ""
-echo -e "  ${RED}⚠ Change the default password immediately after first login!${NC}"
-echo -e "  ${RED}⚠ Delete or protect setup.php before deploying publicly.${NC}"
-echo ""
+echo "Quick start:"
+echo "  php -S 0.0.0.0:8080 -t \"$SCRIPT_DIR\""
+echo "  Then open: http://localhost:8080/login.php"

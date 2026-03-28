@@ -15,6 +15,15 @@ use SAIPS\Middleware\AuthMiddleware;
 
 header('Content-Type: application/json');
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    _fail(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
+}
+
+$csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+if (!verify_csrf($csrf)) {
+    _fail(400, 'INVALID_CSRF', 'Invalid request.');
+}
+
 $dbConfig  = require __DIR__ . '/../../config/database.php';
 $secConfig = require __DIR__ . '/../../config/security.php';
 
@@ -26,14 +35,18 @@ $pdoAuth = new PDO(
     "mysql:host={$dbConfig['auth']['host']};dbname=ownuh_credentials;charset=utf8mb4",
     $dbConfig['auth']['user'], $dbConfig['auth']['pass'], $dbConfig['auth']['options']
 );
-$redis = new Redis();
-$redis->connect($dbConfig['redis']['host'], (int)$dbConfig['redis']['port']);
-if ($dbConfig['redis']['pass']) $redis->auth($dbConfig['redis']['pass']);
-
 AuditMiddleware::init($pdo);
 
-$auth    = new AuthMiddleware($secConfig);
-$payload = $auth->validate();
+$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+if (str_starts_with($authHeader, 'Bearer ')) {
+    $auth    = new AuthMiddleware($secConfig);
+    $payload = $auth->validate();
+} else {
+    $payload = verify_session();
+    if (!$payload) {
+        _fail(401, 'UNAUTHORIZED', 'Authentication required.');
+    }
+}
 $userId  = $payload['sub'];
 
 $body        = json_decode(file_get_contents('php://input'), true) ?? [];

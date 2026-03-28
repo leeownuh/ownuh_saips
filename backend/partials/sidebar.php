@@ -12,7 +12,7 @@ function nav_active(string $href, string $current): string {
         <!-- START BRAND LOGO -->
         <div class="app-sidebar-logo px-6 justify-content-center align-items-center">
             <a href="dashboard.php">
-                <img height="100" class="app-sidebar-logo-default" alt="Logo" src="assets/images/light-logo.png">
+                <img height="70" class="app-sidebar-logo-default" alt="Logo" src="assets/images/light-logo.png">
                 <img height="40" class="app-sidebar-logo-minimize" alt="Logo" src="assets/images/Favicon.png">
             </a>
         </div>
@@ -43,8 +43,8 @@ function nav_active(string $href, string $current): string {
                         <li class="slide"><a href="login.php" class="side-menu__item" role="menuitem">Sign In</a></li>
                         <li class="slide"><a href="otp-verify.php" class="side-menu__item" role="menuitem">MFA Verify</a></li>
                         <li class="slide"><a href="auth-lockscreen.html" class="side-menu__item" role="menuitem">Session Lock</a></li>
-                        <li class="slide"><a href="login.php?forgot=1" class="side-menu__item" role="menuitem">Reset Password</a></li>
-                        <li class="slide"><a href="auth-create-password.html" class="side-menu__item" role="menuitem">Create Password</a></li>
+                        <li class="slide"><a href="forgot-password.php" class="side-menu__item" role="menuitem">Reset Password</a></li>
+                        <li class="slide"><a href="auth-create-password.php" class="side-menu__item" role="menuitem">Create Password</a></li>
                     </ul>
                 </li>
 

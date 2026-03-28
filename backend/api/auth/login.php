@@ -232,6 +232,14 @@ echo json_encode([
 
 function _failAuth(string $email, string $ip, string $reason, int $attempt, $rl, $db): never
 {
+    try {
+        $db->prepare(
+            'INSERT INTO login_attempts (username, ip_address, success, failure_reason, attempted_at)
+             VALUES (?, ?, 0, ?, NOW(3))'
+        )->execute([$email, $ip, $reason]);
+    } catch (Throwable $e) {
+        error_log('[SAIPS] Failed to record login_attempt: ' . $e->getMessage());
+    }
     AuditMiddleware::authFailure($email, $ip, $reason, $attempt);
     http_response_code(401);
     echo json_encode(['status' => 'error', 'code' => 'UNAUTHORIZED', 'message' => 'Invalid credentials.']);

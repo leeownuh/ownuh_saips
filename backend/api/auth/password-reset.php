@@ -1,90 +1,130 @@
 <?php
-/**
- * Ownuh SAIPS — POST /auth/password/reset
- * Sends a password reset link via email.
- * Always returns HTTP 200 regardless of whether email exists (prevents enumeration).
- * SRS §2.2 + §6.1 (admins cannot self-reset)
- */
-
 declare(strict_types=1);
 
-require_once dirname(__DIR__, 3) . '/vendor/autoload.php';
 require_once dirname(__DIR__, 2) . '/bootstrap.php';
+require_once dirname(__DIR__, 1) . '/../../vendor/autoload.php';
+
+session_start();
 
 use SAIPS\Middleware\AuditMiddleware;
-use SAIPS\Middleware\RateLimitMiddleware;
 
 header('Content-Type: application/json');
+header('X-Content-Type-Options: nosniff');
 
-$dbConfig  = require __DIR__ . '/../../config/database.php';
-$secConfig = require __DIR__ . '/../../config/security.php';
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['status' => 'error', 'message' => 'Method not allowed.']);
+    exit;
+}
 
-$pdo = new PDO(
-    "mysql:host={$dbConfig['app']['host']};dbname={$dbConfig['app']['name']};charset=utf8mb4",
-    $dbConfig['app']['user'], $dbConfig['app']['pass'], $dbConfig['app']['options']
-);
-$redis = new Redis();
-$redis->connect($dbConfig['redis']['host'], (int)$dbConfig['redis']['port']);
-if ($dbConfig['redis']['pass']) $redis->auth($dbConfig['redis']['pass']);
+$csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+if (!verify_csrf($csrf)) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'Invalid request.']);
+    exit;
+}
 
-AuditMiddleware::init($pdo);
+AuditMiddleware::init(get_audit_pdo());
 
-$body  = json_decode(file_get_contents('php://input'), true) ?? [];
+$raw  = file_get_contents('php://input');
+$body = json_decode($raw, true) ?? [];
+
 $email = strtolower(trim((string)($body['email'] ?? '')));
+$ip    = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-// Always return success to prevent email enumeration
-$genericResponse = ['status' => 'success', 'message' => 'If an account exists for that email, a reset link has been sent.'];
-
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    echo json_encode($genericResponse);
-    exit;
-}
-
-$stmt = $pdo->prepare('SELECT id, role, status FROM users WHERE email = ? AND deleted_at IS NULL');
-$stmt->execute([$email]);
-$user = $stmt->fetch();
-
-if (!$user) {
-    // Timing attack mitigation — sleep same duration as real path
-    usleep(random_int(100000, 300000));
-    echo json_encode($genericResponse);
-    exit;
-}
-
-// Admin accounts cannot use self-service reset (SRS §6.1)
-if (in_array($user['role'], ['admin', 'superadmin'])) {
-    // Log attempt silently but return generic success
-    AuditMiddleware::log('AUTH-005', 'Password Reset Attempted (Admin — Blocked)', $user['id'], null, null, null, null, null, [
-        'reason' => 'admin_self_service_not_permitted',
+if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    echo json_encode([
+        'status'  => 'success',
+        'message' => 'If that email is registered, a reset link has been sent.'
     ]);
-    usleep(random_int(100000, 300000));
-    echo json_encode($genericResponse);
     exit;
 }
 
-// Generate secure reset token (valid 15 minutes)
-$token     = bin2hex(random_bytes(32));
-$tokenHash = hash('sha256', $token);
-$ttl       = 900; // 15 minutes
+$db = Database::getInstance();
 
-$redis->setex("saips:pwreset:{$tokenHash}", $ttl, $user['id']);
+try {
+    $user = $db->fetchOne(
+        'SELECT id, email, role, status, deleted_at
+         FROM users
+         WHERE email = ? AND deleted_at IS NULL',
+        [$email]
+    );
 
-// Send email (implementation via configured SMTP / SES / Sendgrid)
-// SECURITY FIX: Token is delivered in email body — page uses JS to POST it to
-// /auth/password/confirm. Never include token in query string (leaks via Referer/logs).
-// The linked page reads the fragment (#token=...) client-side only, never sent to server.
-$resetUrl = ($_ENV['APP_URL'] ?? '') . "/auth-create-password.html#token={$token}";
-_sendResetEmail($email, $resetUrl, $secConfig);
+    // Always generic response to avoid enumeration
+    $genericResponse = [
+        'status'  => 'success',
+        'message' => 'If that email is registered, a reset link has been sent.'
+    ];
 
-AuditMiddleware::log('AUTH-005', 'Password Reset Requested', $user['id'], null, null, null, null, null, [
-    'method' => 'self_service_email',
-]);
+    if (!$user) {
+        AuditMiddleware::log('AUTH-010', 'Password Reset Requested', null, $ip, null, null, null, null, [
+            'email' => $email,
+            'outcome' => 'email_not_found'
+        ]);
+        echo json_encode($genericResponse);
+        exit;
+    }
 
-echo json_encode($genericResponse);
+    // Block self-service reset for admins/superadmins
+    if (in_array($user['role'], ['admin', 'superadmin'], true)) {
+        AuditMiddleware::log('AUTH-010', 'Password Reset Requested', $user['id'], $ip, null, null, null, null, [
+            'email' => $email,
+            'outcome' => 'admin_self_service_blocked'
+        ]);
+        echo json_encode($genericResponse);
+        exit;
+    }
 
-function _sendResetEmail(string $to, string $url, array $cfg): void
-{
-    // In production: use PHPMailer / Symfony Mailer / AWS SES
-    // Stub implementation:
-    error_log("[SAIPS] Password reset email would be sent to {$to} with URL: {$url}");
+    if (!in_array($user['status'], ['active', 'pending'], true)) {
+        AuditMiddleware::log('AUTH-010', 'Password Reset Requested', $user['id'], $ip, null, null, null, null, [
+            'email' => $email,
+            'outcome' => 'status_blocked',
+            'status' => $user['status']
+        ]);
+        echo json_encode($genericResponse);
+        exit;
+    }
+
+    $plainToken = bin2hex(random_bytes(32));
+    $tokenHash  = hash('sha256', $plainToken);
+
+    // single active token per user
+    $db->execute(
+        'UPDATE password_resets
+         SET used_at = NOW()
+         WHERE user_id = ? AND used_at IS NULL',
+        [$user['id']]
+    );
+
+    $db->execute(
+        'INSERT INTO password_resets (
+            user_id, token_hash, requested_at, expires_at, used_at, requested_ip
+         ) VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 15 MINUTE), NULL, ?)',
+        [$user['id'], $tokenHash, $ip]
+    );
+
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    $basePath = dirname(dirname(dirname(dirname($scriptName))));
+    $basePath = $basePath === '/' || $basePath === '\\' ? '' : rtrim($basePath, '/');
+
+    $resetLink = $scheme . $host . $basePath . '/reset-password.php?token=' . urlencode($plainToken);
+
+    // Replace this with actual email sending later
+    error_log('[SAIPS RESET LINK] ' . $user['email'] . ' => ' . $resetLink);
+
+    AuditMiddleware::log('AUTH-010', 'Password Reset Requested', $user['id'], $ip, null, null, null, null, [
+        'email' => $email,
+        'outcome' => 'reset_link_issued'
+    ]);
+
+    echo json_encode($genericResponse);
+} catch (Throwable $e) {
+    error_log('[SAIPS] Password reset request failed: ' . $e->getMessage());
+
+    echo json_encode([
+        'status'  => 'success',
+        'message' => 'If that email is registered, a reset link has been sent.'
+    ]);
 }
