@@ -228,4 +228,4 @@ We aim to acknowledge reports within 24 hours and provide a fix timeline within 
 
 ---
 
-*Ownuh © 2025 - All Rights Reserved. CONFIDENTIAL.*
+*Ownuh © 2026 - All Rights Reserved. CONFIDENTIAL.*
