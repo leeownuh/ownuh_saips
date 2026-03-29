@@ -24,6 +24,7 @@ if (verify_session()) {
 $error   = '';
 $success = '';
 $email   = '';
+$showEmailOtpModal = false;
 
 // CAP512 Unit 3: Control flow â€” handle POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -155,6 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
                         $_SESSION['mfa_otp']         = password_hash($otp, PASSWORD_BCRYPT, ['cost' => 10]);
                         $_SESSION['mfa_otp_expires'] = time() + 600; // 10 min
+                        $_SESSION['mfa_otp_demo_plain'] = $otp;
                         log_dev_otp($user['email'], $otp);
                         // In production: send via email. Log for dev:
                         // SECURITY: OTP must be dispatched via EmailService â€” never log credentials
@@ -251,6 +253,40 @@ $refreshHash  = hash('sha256', $refreshToken);
     <link href="assets/css/bootstrap.min.css" id="bootstrap-style" rel="stylesheet">
     <link href="assets/css/app.min.css" id="app-style" rel="stylesheet">
     <link href="assets/css/custom.min.css" id="custom-style" rel="stylesheet">
+    <style>
+        .demo-email-modal .modal-content {
+            border: 0;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 25px 90px rgba(6, 16, 31, 0.28);
+        }
+        .demo-email-shell {
+            background:
+                radial-gradient(circle at top left, rgba(156, 47, 186, 0.18), transparent 34%),
+                radial-gradient(circle at bottom right, rgba(25, 195, 125, 0.16), transparent 30%),
+                linear-gradient(135deg, #0c1b32 0%, #172c46 100%);
+            color: #f4f7fb;
+        }
+        .demo-email-card {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .demo-email-code {
+            font-size: 1.9rem;
+            letter-spacing: .45rem;
+            font-weight: 800;
+            text-align: center;
+            border-radius: 14px;
+        }
+        .demo-email-meta {
+            font-size: .78rem;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: rgba(244, 247, 251, 0.72);
+        }
+    </style>
 </head>
 <body>
 
@@ -391,8 +427,143 @@ $refreshHash  = hash('sha256', $refreshToken);
         </div>
     </div>
 
+    <?php if ($showEmailOtpModal && $mfaPending): ?>
+    <div class="modal fade demo-email-modal" id="emailOtpModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content demo-email-shell">
+                <div class="modal-body p-0">
+                    <div class="row g-0">
+                        <div class="col-lg-6 p-4 p-lg-5 border-end border-white border-opacity-10">
+                            <div class="demo-email-meta mb-3">Demo Email Preview</div>
+                            <h3 class="fw-semibold text-white mb-2">Your verification email is ready.</h3>
+                            <p class="text-white text-opacity-75 mb-4">
+                                For demo flow, the email OTP challenge opens as an inbox-style popup right on the sign-in screen.
+                            </p>
+
+                            <div class="demo-email-card p-4">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <div>
+                                        <div class="demo-email-meta">From</div>
+                                        <div class="fw-semibold">Ownuh SAIPS Security</div>
+                                    </div>
+                                    <span class="badge rounded-pill text-bg-light text-dark">Email OTP</span>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="demo-email-meta">To</div>
+                                    <div class="fw-semibold"><?= esc(mask_login_email((string)$mfaPending['email'])) ?></div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="demo-email-meta">Subject</div>
+                                    <div class="fw-semibold">Sign-in verification code for your secure session</div>
+                                </div>
+                                <div class="border-top border-white border-opacity-10 pt-3">
+                                    <p class="mb-2 text-white text-opacity-75">
+                                        We detected a valid password login and issued a 6-digit verification code to complete access.
+                                    </p>
+                                    <p class="mb-0 text-white text-opacity-75">
+                                        The code expires in 10 minutes and can be resent up to 3 times.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-6 p-4 p-lg-5 bg-white text-dark">
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <div>
+                                    <div class="demo-email-meta text-muted">Verification Step</div>
+                                    <h4 class="fw-semibold mb-0 text-dark">Enter email OTP</h4>
+                                </div>
+                                <span class="badge rounded-pill text-bg-success">Live MFA</span>
+                            </div>
+
+                            <p class="text-muted mb-4">
+                                Finish the sign-in with the 6-digit code sent to
+                                <strong><?= esc(mask_login_email((string)$mfaPending['email'])) ?></strong>.
+                            </p>
+
+                            <form method="POST" action="otp-verify.php" id="demoEmailOtpForm">
+                                <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                                <?php for ($i = 1; $i <= 6; $i++): ?>
+                                <input type="hidden" name="otp_<?= $i ?>" id="demo-otp-<?= $i ?>" value="">
+                                <?php endfor; ?>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold" for="demo-email-otp-code">Verification code</label>
+                                    <input
+                                        type="text"
+                                        id="demo-email-otp-code"
+                                        class="form-control demo-email-code"
+                                        inputmode="numeric"
+                                        maxlength="6"
+                                        autocomplete="one-time-code"
+                                        placeholder="000000"
+                                        autofocus
+                                        required>
+                                    <div class="form-text">Use digits only. Spaces are ignored automatically.</div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2 mb-4">
+                                    <a href="login.php?mfa=email_otp&resend=1" class="btn btn-outline-primary">
+                                        <i class="ri-mail-send-line me-1"></i>Resend Email
+                                    </a>
+                                    <a href="otp-verify.php" class="btn btn-outline-secondary">
+                                        <i class="ri-external-link-line me-1"></i>Open Full MFA Page
+                                    </a>
+                                    <a href="login.php?cancel_mfa=1" class="btn btn-outline-danger">
+                                        <i class="ri-close-circle-line me-1"></i>Cancel
+                                    </a>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="ri-shield-check-line me-2"></i>Verify and Sign In
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <script src="assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="assets/libs/simplebar/simplebar.min.js"></script>
     <script src="assets/js/auth/auth.init.js"></script>
+    <?php if ($showEmailOtpModal && $mfaPending): ?>
+    <script>
+    (function () {
+        const modalEl = document.getElementById('emailOtpModal');
+        const codeInput = document.getElementById('demo-email-otp-code');
+        const form = document.getElementById('demoEmailOtpForm');
+        if (!modalEl || !codeInput || !form) return;
+
+        const modal = new bootstrap.Modal(modalEl, {
+            backdrop: 'static',
+            keyboard: false
+        });
+
+        codeInput.addEventListener('input', function () {
+            this.value = this.value.replace(/\D/g, '').slice(0, 6);
+        });
+
+        form.addEventListener('submit', function (e) {
+            const digits = codeInput.value.replace(/\D/g, '').slice(0, 6);
+            if (digits.length !== 6) {
+                e.preventDefault();
+                codeInput.focus();
+                codeInput.classList.add('is-invalid');
+                return;
+            }
+            codeInput.classList.remove('is-invalid');
+            for (let i = 0; i < 6; i++) {
+                const hidden = document.getElementById('demo-otp-' + (i + 1));
+                if (hidden) hidden.value = digits.charAt(i);
+            }
+        });
+
+        modal.show();
+    }());
+    </script>
+    <?php endif; ?>
 </body>
 </html>

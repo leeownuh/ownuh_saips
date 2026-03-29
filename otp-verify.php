@@ -16,7 +16,7 @@ AuditMiddleware::init(get_audit_pdo());
 
 // If no pending MFA session, redirect to login
 if (empty($_SESSION['mfa_pending']) || $_SESSION['mfa_pending']['expires'] < time()) {
-    unset($_SESSION['mfa_pending'], $_SESSION['mfa_otp'], $_SESSION['mfa_otp_expires']);
+    unset($_SESSION['mfa_pending'], $_SESSION['mfa_otp'], $_SESSION['mfa_otp_expires'], $_SESSION['mfa_otp_demo_plain']);
     header('Location: login.php?error=session_expired');
     exit;
 }
@@ -56,6 +56,7 @@ if (isset($_GET['resend']) && $factor === 'email_otp') {
         $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $_SESSION['mfa_otp']              = password_hash($otp, PASSWORD_BCRYPT, ['cost' => 10]);
         $_SESSION['mfa_otp_expires']      = time() + 600;
+        $_SESSION['mfa_otp_demo_plain']   = $otp;
         $_SESSION['mfa_otp_resend_count'] = $resendCount + 1;
         $_SESSION['mfa_otp_last_resend']  = time();
         log_dev_otp($pending['email'], $otp);
@@ -136,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             && password_verify($submittedCode, $_SESSION['mfa_otp'])
         ) {
             $verified = true;
-            unset($_SESSION['mfa_otp'], $_SESSION['mfa_otp_expires']);
+            unset($_SESSION['mfa_otp'], $_SESSION['mfa_otp_expires'], $_SESSION['mfa_otp_demo_plain']);
         } else {
             $error = 'Invalid or expired code. Codes are valid for 10 minutes.';
         }
@@ -258,6 +259,10 @@ if (!empty($pending['user_id'])) {
 
 $maskedEmail = mask_email($pending['email']);
 $csrf        = csrf_token();
+$demoEmailOtp = '';
+if ($factor === 'email_otp' && (($_ENV['APP_ENV'] ?? 'production') !== 'production')) {
+    $demoEmailOtp = (string)($_SESSION['mfa_otp_demo_plain'] ?? '');
+}
 
 // CAP512 Unit 4: String — factor label
 $factorLabel = match($factor) {
@@ -293,6 +298,26 @@ $factorLabel = match($factor) {
             border-radius: 8px;
         }
         .otp-digit:focus { border-color: #9c2fba; box-shadow: 0 0 0 3px rgba(13,110,253,.25); }
+        .demo-email-preview {
+            border: 1px solid rgba(23, 44, 70, 0.10);
+            border-radius: 18px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 18px 50px rgba(14, 24, 40, 0.10);
+        }
+        .demo-email-preview__header {
+            background: linear-gradient(135deg, #0f2740 0%, #145f63 100%);
+            color: #fff;
+        }
+        .demo-email-preview__code {
+            border: 1px dashed rgba(23, 44, 70, 0.18);
+            border-radius: 16px;
+            background: linear-gradient(180deg, rgba(156, 47, 186, 0.06), rgba(25, 195, 125, 0.05));
+            letter-spacing: .45rem;
+            font-size: 1.65rem;
+            font-weight: 800;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -375,6 +400,31 @@ $factorLabel = match($factor) {
                                 <div class="alert alert-success d-flex gap-2 py-2 mb-3">
                                     <i class="ri-checkbox-circle-line flex-shrink-0"></i>
                                     <span><?= esc($success) ?></span>
+                                </div>
+                                <?php endif; ?>
+
+                                <?php if ($factor === 'email_otp' && $demoEmailOtp !== ''): ?>
+                                <div class="demo-email-preview mb-4">
+                                    <div class="demo-email-preview__header p-3">
+                                        <div class="d-flex align-items-center justify-content-between gap-3">
+                                            <div>
+                                                <div class="small text-white text-opacity-75 text-uppercase fw-semibold">Demo Email Preview</div>
+                                                <div class="fw-semibold">Ownuh SAIPS Security Verification</div>
+                                            </div>
+                                            <span class="badge rounded-pill text-bg-light text-dark">Email OTP</span>
+                                        </div>
+                                    </div>
+                                    <div class="p-3 p-lg-4">
+                                        <div class="small text-muted text-uppercase fw-semibold mb-1">To</div>
+                                        <p class="mb-3 fw-semibold"><?= esc($maskedEmail) ?></p>
+                                        <p class="text-muted mb-3">
+                                            For demo purposes, the verification email is previewed directly on this MFA page so the flow is easy to show while keeping the real verification step intact.
+                                        </p>
+                                        <div class="demo-email-preview__code py-3 mb-3"><?= esc($demoEmailOtp) ?></div>
+                                        <p class="mb-0 text-muted small">
+                                            Valid for 10 minutes. Use the 6-digit code above to complete sign-in.
+                                        </p>
+                                    </div>
                                 </div>
                                 <?php endif; ?>
 
