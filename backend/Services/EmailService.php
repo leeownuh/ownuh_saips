@@ -26,6 +26,83 @@ class EmailService
         'email_otp' => [
             'subject' => 'Your Verification Code - {{app_name}}',
             'body' => 'Hello {{display_name}},\n\nYour verification code is: {{otp_code}}\n\nThis code expires in {{expires_in}}.\n\nIf you did not request this code, please contact your administrator immediately.\n\nBest regards,\n{{app_name}} Security Team',
+            'html' => '<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{app_name}} Verification Code</title>
+</head>
+<body style="margin:0; padding:0; background-color:#eef2f7; font-family:Segoe UI, Arial, sans-serif; color:#0f172a;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">
+        Your {{app_name}} verification code is {{otp_code}}. It expires in {{expires_in}}.
+    </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#eef2f7;">
+        <tr>
+            <td align="center" style="padding:32px 16px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:640px; background-color:#ffffff; border:1px solid #dbe4ee; border-radius:24px; overflow:hidden;">
+                    <tr>
+                        <td style="padding:28px 32px; background-color:#0f172a; background-image:linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%); color:#ffffff;">
+                            <div style="font-size:12px; line-height:18px; letter-spacing:0.12em; text-transform:uppercase; color:#bfdbfe; font-weight:700;">
+                                Secure sign-in verification
+                            </div>
+                            <h1 style="margin:14px 0 10px; font-size:32px; line-height:38px; font-weight:700; color:#ffffff;">
+                                Your verification code
+                            </h1>
+                            <p style="margin:0; font-size:16px; line-height:24px; color:#dbeafe;">
+                                Use this one-time code to continue signing in to {{app_name}}.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:32px;">
+                            <p style="margin:0 0 12px; font-size:16px; line-height:24px; color:#1f2937;">
+                                Hello {{display_name}},
+                            </p>
+                            <p style="margin:0 0 20px; font-size:15px; line-height:24px; color:#475569;">
+                                We received a sign-in request that needs a second layer of verification before access is granted.
+                            </p>
+                            <div style="margin:0 0 22px; padding:22px 18px; text-align:center; border:1px solid #cbd5e1; border-radius:20px; background-color:#f8fafc;">
+                                <div style="margin-bottom:10px; font-size:12px; line-height:18px; letter-spacing:0.12em; text-transform:uppercase; color:#64748b; font-weight:700;">
+                                    One-time verification code
+                                </div>
+                                <div style="font-family:Consolas, Courier New, monospace; font-size:38px; line-height:44px; font-weight:700; letter-spacing:10px; color:#0f172a;">
+                                    {{otp_code}}
+                                </div>
+                            </div>
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:22px; border:1px solid #bfdbfe; border-radius:16px; background-color:#eff6ff;">
+                                <tr>
+                                    <td style="padding:16px 18px;">
+                                        <div style="margin-bottom:6px; font-size:12px; line-height:18px; letter-spacing:0.08em; text-transform:uppercase; color:#1d4ed8; font-weight:700;">
+                                            Important
+                                        </div>
+                                        <div style="font-size:15px; line-height:24px; color:#1e3a8a;">
+                                            This code expires in <strong>{{expires_in}}</strong> and can only be used once.
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="margin:0 0 12px; font-size:15px; line-height:24px; color:#475569;">
+                                If you did not request this sign-in, ignore this message and review recent account activity with your administrator.
+                            </p>
+                            <p style="margin:0; font-size:15px; line-height:24px; color:#475569;">
+                                For your security, never share this code in chat, screenshots, or calls.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:20px 32px; background-color:#f8fafc; border-top:1px solid #e2e8f0;">
+                            <p style="margin:0; font-size:13px; line-height:22px; color:#64748b;">
+                                {{app_name}} Security Team
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>',
         ],
         'account_locked' => [
             'subject' => 'Account Locked - {{app_name}}',
@@ -91,9 +168,22 @@ class EmailService
         ], $data);
         
         // Replace placeholders
-        $subject = $this->replacePlaceholders($templateData['subject'], $data);
-        $body = $this->replacePlaceholders($templateData['body'], $data);
-        
+        $subject = $this->sanitizeSubject(
+            $this->replacePlaceholders($templateData['subject'], $data)
+        );
+        $textBody = $this->normalizeBody(
+            $this->replacePlaceholders($templateData['body'], $data)
+        );
+
+        $body = $textBody;
+        if (isset($templateData['html']) && (($options['is_html'] ?? null) !== false)) {
+            $body = $this->normalizeBody(
+                $this->replacePlaceholders($templateData['html'], $data, true)
+            );
+            $options['is_html'] = true;
+            $options['text_body'] = $options['text_body'] ?? $textBody;
+        }
+
         return $this->send($to, $subject, $body, $options);
     }
     
@@ -108,6 +198,9 @@ class EmailService
      */
     public function send(string $to, string $subject, string $body, array $options = []): array
     {
+        $subject = $this->sanitizeSubject($subject);
+        $body = $this->normalizeBody($body);
+
         // Queue for async sending if Redis is available
         if ($this->redis && ($options['queue'] ?? true)) {
             return $this->queueEmail($to, $subject, $body, $options);
@@ -209,6 +302,7 @@ class EmailService
     {
         $isHtml = (bool)($options['is_html'] ?? false);
         $attachments = $options['attachments'] ?? [];
+        $textBody = $this->normalizeBody((string)($options['text_body'] ?? ''));
         $headers = [];
         $headers[] = 'From: ' . ($this->config['from_name'] ?? 'Ownuh SAIPS') . ' <' . ($this->config['from_email'] ?? 'security@ownuh-saips.com') . '>';
         $headers[] = 'Reply-To: ' . ($this->config['reply_to'] ?? $this->config['from_email'] ?? 'security@ownuh-saips.com');
@@ -247,6 +341,24 @@ class EmailService
                 $parts[] = chunk_split(base64_encode($content));
             }
 
+            $parts[] = '--' . $boundary . '--';
+            $parts[] = '';
+            $messageBody = implode("\r\n", $parts);
+        } elseif ($isHtml && $textBody !== '') {
+            $boundary = 'saips-alt-' . bin2hex(random_bytes(8));
+            $headers[] = 'Content-Type: multipart/alternative; boundary="' . $boundary . '"';
+
+            $parts = [];
+            $parts[] = '--' . $boundary;
+            $parts[] = 'Content-Type: text/plain; charset=UTF-8';
+            $parts[] = 'Content-Transfer-Encoding: 8bit';
+            $parts[] = '';
+            $parts[] = $textBody;
+            $parts[] = '--' . $boundary;
+            $parts[] = 'Content-Type: text/html; charset=UTF-8';
+            $parts[] = 'Content-Transfer-Encoding: 8bit';
+            $parts[] = '';
+            $parts[] = $body;
             $parts[] = '--' . $boundary . '--';
             $parts[] = '';
             $messageBody = implode("\r\n", $parts);
@@ -308,6 +420,7 @@ class EmailService
         $apiKey = $this->config['sendgrid_api_key'] ?? $_ENV['SENDGRID_API_KEY'] ?? '';
         $isHtml = (bool)($options['is_html'] ?? false);
         $attachments = $options['attachments'] ?? [];
+        $textBody = $this->normalizeBody((string)($options['text_body'] ?? ''));
         
         if (!$apiKey) {
             error_log("[EMAIL] SendGrid not configured. Would send to {$to}: {$subject}");
@@ -329,12 +442,19 @@ class EmailService
                 'email' => $this->config['from_email'] ?? 'security@ownuh-saips.com',
                 'name' => $this->config['from_name'] ?? 'Ownuh SAIPS',
             ],
-            'content' => [
-                [
-                    'type' => $isHtml ? 'text/html' : 'text/plain',
-                    'value' => $body,
-                ]
-            ],
+            'content' => [],
+        ];
+
+        if ($isHtml && $textBody !== '') {
+            $data['content'][] = [
+                'type' => 'text/plain',
+                'value' => $textBody,
+            ];
+        }
+
+        $data['content'][] = [
+            'type' => $isHtml ? 'text/html' : 'text/plain',
+            'value' => $body,
         ];
 
         $replyTo = $this->config['reply_to'] ?? $this->config['from_email'] ?? null;
@@ -395,12 +515,33 @@ class EmailService
     /**
      * Replace placeholders in template.
      */
-    private function replacePlaceholders(string $template, array $data): string
+    private function replacePlaceholders(string $template, array $data, bool $escapeHtml = false): string
     {
         foreach ($data as $key => $value) {
-            $template = str_replace('{{' . $key . '}}', (string)$value, $template);
+            $replacement = (string)$value;
+            if ($escapeHtml) {
+                $replacement = htmlspecialchars($replacement, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            }
+            $template = str_replace('{{' . $key . '}}', $replacement, $template);
         }
         return $template;
+    }
+
+    private function sanitizeSubject(string $subject): string
+    {
+        $subject = preg_replace('/[\r\n]+/', ' ', $subject) ?? $subject;
+        return trim($subject);
+    }
+
+    private function normalizeBody(string $body): string
+    {
+        $body = str_replace(
+            ["\\r\\n", "\\n", "\\r", "\\t"],
+            ["\n", "\n", "\r", "\t"],
+            $body
+        );
+
+        return str_replace(["\r\n", "\r"], "\n", $body);
     }
     
     /**

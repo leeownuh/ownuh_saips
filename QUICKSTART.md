@@ -39,6 +39,7 @@ Default behavior:
 - generates JWT keys
 - writes `backend/config/.env`
 - leaves the app ready for AI executive reporting once an OpenAI key is added
+- uses the `demo` install profile by default; switch to `.\setup_windows.ps1 -Profile production` when you want least-privilege DB users and production-safe `.env` values
 
 #### Batch
 
@@ -78,6 +79,18 @@ http://localhost/ownuh_saips_fixed/login.php
 Change the default password immediately after first login.
 
 `lucia.alvarez@ownuh-saips.com` is the best primary demo login because the portfolio dataset is shaped for a clean admin walkthrough.
+
+If `DEMO_MODE=1` is enabled, the app opens with a simple Demo vs Production chooser so non-technical viewers can take the guided showcase path without you changing the core runtime mode.
+
+<p align="center">
+  <img src="saips-screenshots/demo-or-production.png" alt="Ownuh SAIPS demo or production chooser" width="100%">
+</p>
+
+The demo path also keeps the MFA step presentation-friendly by surfacing the recruiter-safe OTP preview inline instead of forcing you to break the story and hunt through a real inbox.
+
+<p align="center">
+  <img src="saips-screenshots/demo-otp.png" alt="Ownuh SAIPS demo OTP preview" width="100%">
+</p>
 
 ### 6.1 Best first click-through
 
@@ -132,6 +145,7 @@ Default behavior:
 - imports `database/portfolio_seed.sql`
 - generates JWT keys
 - writes `backend/config/.env`
+- uses the `demo` install profile by default; switch to `INSTALL_PROFILE=production bash install.sh` when you want least-privilege DB users and production-safe `.env` values
 
 Then start the app with:
 
@@ -175,7 +189,10 @@ TRUSTED_PROXY=any
 COOKIE_SAMESITE=Lax
 APP_TIMEZONE=Asia/Kolkata
 APP_TIMEZONE_LABEL=IST
+DEMO_MODE=1
 ```
+
+`DEMO_MODE=1` keeps the public tunnel polished: visitors get the experience chooser, the recruiter-safe demo lane, and the read-only masked walkthrough without weakening the real production path.
 
 ---
 
@@ -212,6 +229,7 @@ APP_TIMEZONE_LABEL=IST
 | AI executive report falls back to local summary | Add `OPENAI_API_KEY` to `backend/config/.env` |
 | Weekly executive report sends too often or without attachment | Review cadence and attachment settings on `settings-compliance.php` |
 | Alert rule exists but no email arrives | Confirm the event code is one of the wired dispatcher events and the recipient address is valid |
+| Demo visitors see live-looking identities | Confirm `DEMO_MODE=1` is enabled so masking, tokenisation, and read-only controls are active |
 
 ---
 

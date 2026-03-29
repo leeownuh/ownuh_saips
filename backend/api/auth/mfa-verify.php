@@ -108,7 +108,7 @@ switch ($factor) {
 }
 
 if (!$verified) {
-    AuditMiddleware::authFailure($user['id'], $pending['ip'], "mfa_failed:{$factor}", 0);
+    AuditMiddleware::authFailure($user['id'], $pending['ip'], "mfa_failed:{$factor}", 0, $pending['region'] ?? null);
     http_response_code(401);
     echo json_encode(['status' => 'error', 'code' => 'UNAUTHORIZED', 'message' => 'Invalid MFA code.']);
     exit;
@@ -128,7 +128,7 @@ $pdo->prepare(
     $pdo, $redis, $secConfig
 );
 
-AuditMiddleware::authSuccess($user['id'], $pending['ip'], $pending['country'] ?? 'XX', $factor, $pending['risk_score'] ?? 0);
+AuditMiddleware::authSuccess($user['id'], $pending['ip'], $pending['country'] ?? 'XX', $factor, $pending['risk_score'] ?? 0, $pending['region'] ?? null);
 
 echo json_encode([
     'status'        => 'success',

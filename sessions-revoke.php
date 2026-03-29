@@ -9,6 +9,7 @@ use SAIPS\Middleware\AuditMiddleware;
 $authUser = require_auth('admin');
 $db       = Database::getInstance();
 $csrf     = csrf_token();
+$demoReadOnly = app_is_demo_mode();
 
 AuditMiddleware::init(get_audit_pdo());
 
@@ -50,7 +51,10 @@ function clear_current_auth_session(): void {
 
 // Handle POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!verify_csrf($_POST['csrf_token'] ?? null)) {
+    if ($demoReadOnly) {
+        $flash = 'Demo experience is read-only. Session controls stay visible for walkthroughs, but live revocation is disabled.';
+        $flashType = 'warning';
+    } elseif (!verify_csrf($_POST['csrf_token'] ?? null)) {
         $flash = 'Invalid request.';
         $flashType = 'danger';
     } else {
@@ -266,12 +270,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$users = $db->fetchAll(
-    'SELECT id, email, display_name, role, status
+$usersSql = 'SELECT id, email, display_name, role, status
      FROM users
-     WHERE deleted_at IS NULL
-     ORDER BY FIELD(role,"superadmin","admin","manager","user"), display_name'
-);
+     WHERE deleted_at IS NULL';
+$usersParams = [];
+$usersTypes = '';
+
+if ($demoReadOnly) {
+    $seedUserIds = app_demo_seed_user_ids();
+    $usersSql .= ' AND id IN (' . implode(',', array_fill(0, count($seedUserIds), '?')) . ')';
+    $usersParams = $seedUserIds;
+    $usersTypes = str_repeat('s', count($seedUserIds));
+}
+
+$usersSql .= ' ORDER BY FIELD(role,"superadmin","admin","manager","user"), display_name';
+$users = $db->fetchAll($usersSql, $usersParams, $usersTypes);
+if ($demoReadOnly) {
+    $users = array_map('app_demo_present_user_row', $users);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -312,6 +328,19 @@ $users = $db->fetchAll(
             </div>
         </div>
 
+        <?php if ($demoReadOnly): ?>
+            <div class="alert border-0 shadow-sm mb-4" style="background:linear-gradient(135deg,rgba(15,39,64,0.96) 0%, rgba(76,120,86,0.95) 100%); color:#f4f7fb;">
+                <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
+                    <div>
+                        <div class="text-uppercase text-white text-opacity-75 fw-semibold fs-12 mb-1">Demo-safe Control Surface</div>
+                        <div class="fw-semibold text-white mb-1">Revocation controls are visible, but safely deactivated.</div>
+                        <div class="text-white text-opacity-75 small">This keeps the operational story clear for recruiters while protecting the live environment from accidental or playful clicks.</div>
+                    </div>
+                    <a href="sessions-active.php" class="btn btn-light btn-sm"><i class="ri-computer-line me-1"></i>Back to Sessions</a>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <?php if ($flash): ?>
             <div class="alert alert-<?= esc($flashType) ?> mb-4">
                 <?= esc($flash) ?>
@@ -338,7 +367,7 @@ $users = $db->fetchAll(
 
                             <div class="mb-3">
                                 <label class="form-label">Select User</label>
-                                <select class="form-select" name="user_id" required>
+                                <select class="form-select" name="user_id" required <?= $demoReadOnly ? 'disabled' : '' ?>>
                                     <option value="">— Select user —</option>
                                     <?php foreach ($users as $u): ?>
                                         <option value="<?= esc($u['id']) ?>">
@@ -350,11 +379,11 @@ $users = $db->fetchAll(
 
                             <div class="mb-3">
                                 <label class="form-label">Reason / Justification</label>
-                                <textarea class="form-control" name="reason" rows="3" required placeholder="Required for audit log"></textarea>
+                                <textarea class="form-control" name="reason" rows="3" required placeholder="Required for audit log" <?= $demoReadOnly ? 'disabled' : '' ?>></textarea>
                             </div>
 
-                            <button class="btn btn-danger w-100" type="submit">
-                                <i class="ri-logout-circle-line me-2"></i>Revoke All Sessions for User
+                            <button class="btn btn-danger w-100" type="submit" <?= $demoReadOnly ? 'disabled' : '' ?>>
+                                <i class="ri-logout-circle-line me-2"></i><?= $demoReadOnly ? 'Disabled in Demo Mode' : 'Revoke All Sessions for User' ?>
                             </button>
                         </form>
                     </div>
@@ -379,16 +408,16 @@ $users = $db->fetchAll(
 
                             <div class="mb-3">
                                 <label class="form-label">Session ID</label>
-                                <input type="text" class="form-control fw-mono" name="session_id" placeholder="Session ID" required>
+                                <input type="text" class="form-control fw-mono" name="session_id" placeholder="Session ID" required <?= $demoReadOnly ? 'disabled' : '' ?>>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Reason / Justification</label>
-                                <textarea class="form-control" name="reason" rows="3" required placeholder="Required for audit log"></textarea>
+                                <textarea class="form-control" name="reason" rows="3" required placeholder="Required for audit log" <?= $demoReadOnly ? 'disabled' : '' ?>></textarea>
                             </div>
 
-                            <button class="btn btn-warning w-100" type="submit">
-                                <i class="ri-close-circle-line me-2"></i>Revoke Specific Session
+                            <button class="btn btn-warning w-100" type="submit" <?= $demoReadOnly ? 'disabled' : '' ?>>
+                                <i class="ri-close-circle-line me-2"></i><?= $demoReadOnly ? 'Disabled in Demo Mode' : 'Revoke Specific Session' ?>
                             </button>
                         </form>
                     </div>
@@ -414,16 +443,16 @@ $users = $db->fetchAll(
 
                             <div class="mb-3">
                                 <label class="form-label">Type <strong>CONFIRM REVOKE ALL</strong> to proceed</label>
-                                <input type="text" class="form-control border-danger" name="confirm_text" placeholder="CONFIRM REVOKE ALL" <?= ($authUser['role'] ?? '') !== 'superadmin' ? 'disabled' : '' ?>>
+                                <input type="text" class="form-control border-danger" name="confirm_text" placeholder="CONFIRM REVOKE ALL" <?= (($authUser['role'] ?? '') !== 'superadmin' || $demoReadOnly) ? 'disabled' : '' ?>>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Reason / Justification</label>
-                                <textarea class="form-control" name="reason" rows="3" required <?= ($authUser['role'] ?? '') !== 'superadmin' ? 'disabled' : '' ?> placeholder="Required for audit log"></textarea>
+                                <textarea class="form-control" name="reason" rows="3" required <?= (($authUser['role'] ?? '') !== 'superadmin' || $demoReadOnly) ? 'disabled' : '' ?> placeholder="Required for audit log"></textarea>
                             </div>
 
-                            <button class="btn btn-outline-danger w-100" type="submit" <?= ($authUser['role'] ?? '') !== 'superadmin' ? 'disabled' : '' ?>>
-                                <i class="ri-delete-bin-line me-2"></i>Revoke ALL System Sessions — Superadmin Only
+                            <button class="btn btn-outline-danger w-100" type="submit" <?= (($authUser['role'] ?? '') !== 'superadmin' || $demoReadOnly) ? 'disabled' : '' ?>>
+                                <i class="ri-delete-bin-line me-2"></i><?= $demoReadOnly ? 'Disabled in Demo Mode' : 'Revoke ALL System Sessions — Superadmin Only' ?>
                             </button>
                         </form>
                     </div>

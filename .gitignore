@@ -15,6 +15,9 @@ debug_*.php
 summarized_conversations/
 *.swp
 *.swo
+backend/data/*.mmdb
+composer.phar
+composer-setup.php
 
 # ── OS / IDE ─────────────────────────────────────────────────
 .DS_Store

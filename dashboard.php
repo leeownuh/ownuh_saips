@@ -45,6 +45,7 @@ $mapData = json_encode($loginOrigins, JSON_HEX_APOS | JSON_HEX_QUOT);
 
 // CSRF token for any forms — CAP512 Unit 2: Security
 $csrf = csrf_token();
+$demoReadOnly = app_is_demo_mode();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -94,11 +95,34 @@ $csrf = csrf_token();
                     <span class="badge bg-success-subtle text-success border border-success px-3 py-2">
                         <i class="ri-database-2-line me-1"></i>Live DB · <?= esc(date('H:i:s')) ?> IST
                     </span>
-                    <a href="javascript:void(0)" class="btn btn-sm btn-light-primary" data-bs-toggle="modal" data-bs-target="#addAlertModal">
-                        <i class="ri-add-line me-1"></i>Create Alert Rule
-                    </a>
+                    <?php if ($demoReadOnly): ?>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
+                            <i class="ri-eye-line me-1"></i>Demo Read-Only
+                        </button>
+                    <?php else: ?>
+                        <a href="javascript:void(0)" class="btn btn-sm btn-light-primary" data-bs-toggle="modal" data-bs-target="#addAlertModal">
+                            <i class="ri-add-line me-1"></i>Create Alert Rule
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
+
+            <?php if (app_is_demo_mode()): ?>
+            <div class="alert border-0 shadow-sm mb-4" style="background:linear-gradient(135deg,rgba(15,39,64,0.96) 0%, rgba(21,94,99,0.94) 100%); color:#f4f7fb;">
+                <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
+                    <div>
+                        <div class="text-uppercase text-white text-opacity-75 fw-semibold fs-12 mb-1">Guided Demo Story</div>
+                        <h5 class="fw-semibold text-white mb-2">Start with the top visuals, then move into the proof.</h5>
+                        <p class="mb-0 text-white text-opacity-75">Lead with the authentication trend and global map, scroll into the live audit table and user controls, then open Compliance to show the AI executive report and export flow.</p>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="audit-log.php" class="btn btn-light btn-sm"><i class="ri-file-search-line me-1"></i>Audit Log</a>
+                        <a href="settings-compliance.php" class="btn btn-outline-light btn-sm"><i class="ri-file-chart-line me-1"></i>AI Report</a>
+                        <a href="users.php" class="btn btn-outline-light btn-sm"><i class="ri-group-line me-1"></i>User Controls</a>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <div class="project-dashboard">
 
@@ -288,6 +312,7 @@ $csrf = csrf_token();
                                                 <th>Timestamp (UTC)</th>
                                                 <th>Event Type</th>
                                                 <th>Country</th>
+                                                <th>Region</th>
                                                 <th>Risk</th>
                                                 <th>Status</th>
                                             </tr>
@@ -295,9 +320,25 @@ $csrf = csrf_token();
                                         <tbody>
                                         <!-- CAP512 Unit 3: foreach loop + Unit 7: DB results -->
                                         <?php if (empty($recentAudit)): ?>
-                                            <tr><td colspan="7" class="text-center text-muted py-4">No audit events yet — run the seed data to populate.</td></tr>
+                                            <tr><td colspan="8" class="text-center text-muted py-4">No audit events yet — run the seed data to populate.</td></tr>
                                         <?php else: ?>
                                             <?php foreach ($recentAudit as $entry): ?>
+                                            <?php
+                                                $entryIdentity = app_demo_safe_identity(
+                                                    (string)($entry['email'] ?? ''),
+                                                    (string)($entry['display_name'] ?? '')
+                                                );
+                                                $sourceIp = (string)($entry['source_ip'] ?? '');
+                                                $displaySourceIp = $sourceIp !== '' ? $sourceIp : '—';
+                                                $countryCode = strtoupper(trim((string)($entry['country_code'] ?? '')));
+                                                $displayCountry = ($countryCode === '' || $countryCode === 'XX') ? 'Unknown' : $countryCode;
+                                                $details = $entry['details'] ? json_decode((string)$entry['details'], true) : [];
+                                                $region = (string)($entry['region'] ?? '');
+                                                if ($region === '' && is_array($details) && !empty($details['region'])) {
+                                                    $region = (string)$details['region'];
+                                                }
+                                                $displayRegion = $region !== '' ? $region : '—';
+                                            ?>
                                             <tr>
                                                 <td><span class="badge <?= event_badge_class($entry['event_code']) ?>"><?= esc($entry['event_code']) ?></span></td>
                                                 <td>
@@ -310,20 +351,21 @@ $csrf = csrf_token();
                                                             <span class="fs-13"><?= esc($entry['email']) ?></span>
                                                         <?php else: ?>
                                                             <i class="ri-global-line text-muted fs-16"></i>
-                                                            <span class="fw-mono fs-12"><?= esc($entry['source_ip'] ?? '—') ?></span>
+                                                            <span class="fw-mono fs-12"><?= esc($displaySourceIp) ?></span>
                                                         <?php endif; ?>
                                                     </div>
                                                 </td>
                                                 <td class="text-muted fs-12"><?= format_ts($entry['created_at']) ?></td>
                                                 <td class="fs-13"><?= esc($entry['event_name']) ?></td>
                                                 <td class="text-muted fs-12"><?= esc($entry['country_code'] ?? '—') ?></td>
+                                                <td class="text-muted fs-12"><?= esc($displayRegion) ?></td>
                                                 <td>
                                                     <?php
                                                     // CAP512 Unit 2: Variables + conditionals
                                                     $risk = (int)($entry['risk_score'] ?? 0);
                                                     $riskClass = $risk >= 80 ? 'danger' : ($risk >= 40 ? 'warning' : 'success');
                                                     ?>
-                                                    <span class="badge bg-<?= $riskClass ?>-subtle text-<?= $riskClass ?>"><?= $risk > 0 ? $risk : '—' ?></span>
+                                                    <span class="badge bg-<?= $riskClass ?>-subtle text-<?= $riskClass ?>"><?= $risk ?></span>
                                                 </td>
                                                 <td>
                                                     <?php
@@ -391,11 +433,11 @@ $csrf = csrf_token();
                                                 <td><?= role_badge($u['role']) ?></td>
                                                 <td>
                                                     <div class="hstack gap-1">
-                                                        <button class="btn btn-light-primary border-primary icon-btn-sm" title="Edit"><i class="ri-edit-2-line"></i></button>
+                                                        <button class="btn btn-light-primary border-primary icon-btn-sm" title="<?= $demoReadOnly ? 'Disabled in demo mode' : 'Edit' ?>" <?= $demoReadOnly ? 'disabled' : '' ?>><i class="ri-edit-2-line"></i></button>
                                                         <?php if ($u['status'] === 'locked'): ?>
-                                                            <button class="btn btn-light-success border-success icon-btn-sm" title="Unlock"><i class="ri-lock-unlock-line"></i></button>
+                                                            <button class="btn btn-light-success border-success icon-btn-sm" title="<?= $demoReadOnly ? 'Disabled in demo mode' : 'Unlock' ?>" <?= $demoReadOnly ? 'disabled' : '' ?>><i class="ri-lock-unlock-line"></i></button>
                                                         <?php else: ?>
-                                                            <button class="btn btn-light-warning border-warning icon-btn-sm" title="Lock"><i class="ri-lock-line"></i></button>
+                                                            <button class="btn btn-light-warning border-warning icon-btn-sm" title="<?= $demoReadOnly ? 'Disabled in demo mode' : 'Lock' ?>" <?= $demoReadOnly ? 'disabled' : '' ?>><i class="ri-lock-line"></i></button>
                                                         <?php endif; ?>
                                                         <a href="audit-log.php?user_id=<?= esc($u['id']) ?>" class="btn btn-light-secondary border-secondary icon-btn-sm" title="Audit Log"><i class="ri-file-search-line"></i></a>
                                                     </div>
@@ -417,6 +459,7 @@ $csrf = csrf_token();
         </div>
     </main>
 
+    <?php if (!$demoReadOnly): ?>
     <!-- Add Alert Rule Modal — AJAX submit (no full-page reload) -->
     <div class="modal fade" id="addAlertModal" tabindex="-1" aria-labelledby="addAlertModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -594,6 +637,7 @@ $csrf = csrf_token();
         }
     }());
     </script>
+    <?php endif; ?>
 
     <!-- JAVASCRIPT -->
     <script src="assets/js/sidebar.js"></script>

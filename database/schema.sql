@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     source_ip               VARCHAR(45)     NULL DEFAULT NULL,
     user_agent              TEXT            NULL,
     country_code            CHAR(2)         NULL DEFAULT NULL,
+    region                  VARCHAR(100)    NULL DEFAULT NULL,
     device_fingerprint      VARCHAR(128)    NULL DEFAULT NULL,
     mfa_method              VARCHAR(20)     NULL DEFAULT NULL,
     risk_score              TINYINT UNSIGNED NULL DEFAULT NULL,
@@ -338,6 +339,7 @@ CREATE PROCEDURE sp_insert_audit_log(
     IN p_source_ip      VARCHAR(45),
     IN p_user_agent     TEXT,
     IN p_country_code   CHAR(2),
+    IN p_region         VARCHAR(100),
     IN p_mfa_method     VARCHAR(20),
     IN p_risk_score     TINYINT UNSIGNED,
     IN p_details        JSON,
@@ -371,11 +373,11 @@ BEGIN
 
     INSERT INTO audit_log (
         event_code, event_name, user_id, source_ip, user_agent,
-        country_code, mfa_method, risk_score, details,
+        country_code, region, mfa_method, risk_score, details,
         admin_id, target_user_id, entry_hash, prev_hash
     ) VALUES (
         p_event_code, p_event_name, p_user_id, p_source_ip, p_user_agent,
-        p_country_code, p_mfa_method, p_risk_score, p_details,
+        p_country_code, p_region, p_mfa_method, p_risk_score, p_details,
         p_admin_id, p_target_user_id, v_entry_hash, v_prev_hash
     );
 END //

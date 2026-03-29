@@ -27,7 +27,7 @@
   <img alt="Demo Ready" src="https://img.shields.io/badge/Demo-XAMPP%20%2B%20ngrok-5D5D36?style=flat-square">
 </p>
 
-**Version:** 1.2.0  
+**Version:** 1.2.1  
 **Classification:** CONFIDENTIAL  
 **Effective:** March 2026
 
@@ -43,6 +43,8 @@ Ownuh SAIPS is a full-stack security administration platform built with PHP, MyS
 This is not just a login screen with a dashboard bolted on. It is designed to feel like a compact security operations product: analysts get incident and IPS visibility, admins get strong auth controls, and leadership gets executive-ready posture reporting without needing to read raw logs.
 
 It now also includes executive-facing AI reporting, downloadable posture exports, scheduled leadership updates, real alert-driven email notifications, and a cleaner shared-layout UI layer across the PHP application.
+
+The public demo lane is intentionally separated from the core production experience too. Visitors can choose Demo or Production on arrival, demo identities are masked or tokenised when needed, and risky operator actions stay read-only so the showcase tells the product story without exposing your live working data.
 
 **Compliance targets:** NIST SP 800-63B, OWASP Top 10, ISO/IEC 27001, GDPR Article 33, SOC 2 Type II
 
@@ -99,6 +101,22 @@ This is where the platform broadens from operator tooling into leadership-ready 
 
 The sign-in screen sets the tone early. It is still security-first, but the product presentation is deliberate enough that the app feels cohesive before the user even enters the dashboard.
 
+### Demo Or Production Chooser
+
+<p align="center">
+  <img src="saips-screenshots/demo-or-production.png" alt="Ownuh SAIPS demo or production chooser" width="100%">
+</p>
+
+Public viewers are not expected to understand environment flags or security tradeoffs. The app now opens with a simple experience selector so recruiters and peers can pick a guided demo lane or a stricter production-style flow without touching configuration.
+
+### Demo MFA Preview
+
+<p align="center">
+  <img src="saips-screenshots/demo-otp.png" alt="Ownuh SAIPS demo OTP preview" width="100%">
+</p>
+
+The demo path keeps the MFA story visible without relying on a real inbox mid-presentation. The OTP step is presented in a recruiter-friendly way while the production path keeps the normal email-driven behaviour.
+
 ## Quick Start
 
 ### 1. Install
@@ -126,6 +144,7 @@ The Windows setup script:
 - generates JWT keys in `keys/`
 - writes `backend/config/.env`
 - prints the live demo login and app URL
+- defaults to a `demo` install profile; use `.\setup_windows.ps1 -Profile production` for least-privilege DB users and production-safe `.env` values
 
 #### Linux / macOS
 
@@ -141,6 +160,12 @@ The Linux setup script:
 - generates JWT keys in `keys/`
 - writes `backend/config/.env`
 - prints the live demo login and app URL
+- defaults to a `demo` install profile; use `INSTALL_PROFILE=production bash install.sh` for least-privilege DB users and production-safe `.env` values
+
+Installer profiles:
+
+- `demo` keeps local setup friction low and writes a demo-friendly `.env`
+- `production` creates least-privilege MySQL users, raises bcrypt cost, and writes a production-safe `.env`
 
 ### 2. Start the app
 
@@ -215,10 +240,40 @@ TRUSTED_PROXY=any
 COOKIE_SAMESITE=Lax
 APP_TIMEZONE=Asia/Kolkata
 APP_TIMEZONE_LABEL=IST
+DEMO_MODE=1
 ```
 
 `TRUSTED_PROXY=any` allows the app to trust ngrok's forwarded HTTPS headers.  
 `COOKIE_SAMESITE=Lax` prevents login/session breakage through the tunnel.
+`DEMO_MODE=1` enables a friendly Demo vs Production chooser on arrival, so visitors can pick the guided showcase flow or the live production-style path without changing `APP_ENV`.
+
+---
+
+## GeoLite2 Region Lookup (Optional)
+
+If you want accurate region + country in audit logs without relying on external HTTP lookups, add the GeoLite2 City database locally.
+
+### 1. Install the PHP reader
+
+```bash
+composer require geoip2/geoip2
+```
+
+### 2. Download the MaxMind GeoLite2 City database
+
+Place the `.mmdb` file here:
+
+```text
+backend/data/GeoLite2-City.mmdb
+```
+
+### 3. Enable it in `.env`
+
+```env
+GEOIP_DB_PATH=backend/data/GeoLite2-City.mmdb
+```
+
+Once configured, new login events will log Country + Region without hitting external APIs.
 
 ---
 
@@ -239,7 +294,7 @@ APP_TIMEZONE_LABEL=IST
 
 - AI-generated executive posture reporting from live compliance and security metrics
 - OpenAI-compatible AI provider support for executive posture reporting, including Groq via `OPENAI_BASE_URL`
-- Executive report export in browser-friendly HTML and printable PDF
+- Executive report export in browser-friendly HTML and a polished board-style PDF
 - Scheduled weekly executive report emails to active admins and superadmins
 - Stored executive report history with cadence and attachment preferences
 
@@ -250,6 +305,7 @@ APP_TIMEZONE_LABEL=IST
 - Shared PHP header, sidebar, mobile menu, and footer-script partials for easier maintenance
 - Shared-shell PHP replacements for auth, error, maintenance, offline, and signup utility pages
 - IST-based application time defaults via environment configuration
+- Recruiter-safe Demo mode with experience chooser, masked identities, tokenised audit/session details, and read-only public controls
 
 ---
 
@@ -268,6 +324,9 @@ APP_TIMEZONE_LABEL=IST
 - The alert-rule pipeline now dispatches real email notifications for wired security and incident events instead of acting as UI-only configuration
 - Shared layout partials now drive the main PHP shell so header, menu, and footer behavior stay consistent
 - Header search, fullscreen handling, and dark-mode menu behavior are now unified across the app
+- Demo mode now separates public recruiter walkthroughs from the production path with a chooser, masked identities, tokenised records, and read-only admin controls
+- Region-aware sign-in auditing now supports GeoLite2-backed local lookup for cleaner geo visibility without external runtime dependency
+- Executive-report PDF export now renders in a styled, board-ready format that matches the product’s visual tone
 
 ---
 
@@ -277,6 +336,7 @@ APP_TIMEZONE_LABEL=IST
 - The AI features are constrained and useful: they summarize posture for decision-makers rather than pretending to auto-run security
 - Email is not just decorative in the settings table anymore; weekly reports and wired alert events actually send
 - The app now has enough shared layout structure that new screens can be added without copy-pasting headers and footers everywhere
+- The demo story is safer now: it still feels alive, but it no longer needs your live identities or mutable admin controls to look convincing
 
 ---
 
@@ -311,10 +371,20 @@ APP_TIMEZONE_LABEL=IST
 - Executive-report emails render as HTML and can attach the generated report as PDF
 - Alert rules are now live event-to-email notifications for the wired auth, IPS, and incident event codes
 - Historical audit entries are not rewritten by email-domain migrations, preserving tamper-evident hash integrity
+- Demo mode masks or tokenises non-seed identities, IPs, and session-like values while keeping the production path untouched
 
 ---
 
 ## Changelog
+
+### v1.2.1 (March 2026)
+
+- Added a public Demo vs Production chooser so non-technical viewers can pick the right path without touching config
+- Added recruiter-safe masking and tokenisation for demo identities, IPs, session-like values, and audit-detail text
+- Locked risky demo surfaces into read-only mode for sessions, user actions, and other public walkthrough controls
+- Added GeoLite2-backed local region lookup support for cleaner sign-in geography
+- Redesigned executive-report PDF export into a styled, board-ready document
+- Expanded README visuals with the demo chooser and demo MFA preview screens
 
 ### v1.2.0 (March 2026)
 

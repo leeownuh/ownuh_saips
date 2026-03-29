@@ -299,9 +299,10 @@ $reportHistory = $reportManager->getHistory(8);
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>
-                                                    <div class="fs-13"><?= esc((string)($entry['display_name'] ?? $entry['email'] ?? 'System')) ?></div>
+                                                    <?php $reportIdentity = app_demo_safe_identity((string)($entry['email'] ?? ''), (string)($entry['display_name'] ?? ''), 'admin'); ?>
+                                                    <div class="fs-13"><?= esc($reportIdentity['display_name'] !== '' ? $reportIdentity['display_name'] : 'System') ?></div>
                                                     <?php if (!empty($entry['email_recipients'])): ?>
-                                                        <div class="text-muted fs-12"><?= esc((string)$entry['email_recipients']) ?></div>
+                                                        <div class="text-muted fs-12"><?= esc(app_demo_safe_text((string)$entry['email_recipients'])) ?></div>
                                                     <?php endif; ?>
                                                 </td>
                                             </tr>

@@ -92,6 +92,8 @@ if ($method === 'POST' && !preg_match('#/users/[^/]+#', $uri)) {
     $displayName = trim((string)($body['display_name'] ?? ''));
     $email       = strtolower(trim((string)($body['email'] ?? '')));
     $userRole    = $body['role'] ?? 'user';
+    $defaultPassword = 'Welcome@SAIPS2026!';
+    $bcryptCost = max(10, min(15, (int)($secConfig['password']['bcrypt_cost'] ?? ($_ENV['BCRYPT_COST'] ?? 12))));
 
     if (!$displayName || !$email) {
         http_response_code(400);
@@ -112,17 +114,44 @@ if ($method === 'POST' && !preg_match('#/users/[^/]+#', $uri)) {
         exit;
     }
 
-    $userId = bin2hex(random_bytes(16));
+    $existing = $pdo->prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL');
+    $existing->execute([$email]);
+    if ($existing->fetchColumn()) {
+        http_response_code(409);
+        echo json_encode(['status' => 'error', 'code' => 'EMAIL_EXISTS', 'message' => 'A user with that email already exists.']);
+        exit;
+    }
+
+    $userId = 'usr-' . substr(bin2hex(random_bytes(16)), 0, 33);
     $stmt   = $pdo->prepare(
-        'INSERT INTO users (id, display_name, email, role, status)
-         VALUES (?, ?, ?, ?, "pending")'
+        'INSERT INTO users (id, display_name, email, role, status, mfa_enrolled, mfa_factor, email_verified)
+         VALUES (?, ?, ?, ?, "pending", 0, "none", 0)'
     );
     $stmt->execute([$userId, $displayName, $email, $userRole]);
+
+    try {
+        provision_user_credentials($userId, $defaultPassword, null, $bcryptCost);
+    } catch (Throwable $e) {
+        $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$userId]);
+        error_log('[SAIPS] API user creation failed to provision credentials: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode([
+            'status' => 'error',
+            'code' => 'CREDENTIAL_PROVISION_FAILED',
+            'message' => 'User record could not be finalised. Please try again.',
+        ]);
+        exit;
+    }
 
     AuditMiddleware::userRecordModified($adminId, $userId, ['action' => 'created', 'role' => $userRole]);
 
     http_response_code(201);
-    echo json_encode(['status' => 'success', 'user_id' => $userId]);
+    echo json_encode([
+        'status' => 'success',
+        'user_id' => $userId,
+        'default_password' => $defaultPassword,
+        'message' => 'User created in pending status. Share the temporary password only through a secure channel.',
+    ]);
     exit;
 }
 

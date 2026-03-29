@@ -25,6 +25,10 @@ $pending = $_SESSION['mfa_pending'];
 $error   = '';
 $factor  = $pending['mfa_factor'];
 $authMethod = $factor;
+$pendingIp = $pending['ip'] ?? resolve_client_ip();
+$geoPending = resolve_geo_from_ip($pendingIp);
+$pendingCountry = $pending['country'] ?? $geoPending['country'] ?? null;
+$pendingRegion = $pending['region'] ?? $geoPending['region'] ?? null;
 
 // Mask email — CAP512 Unit 4: String manipulation
 function mask_email(string $email): string {
@@ -56,10 +60,19 @@ if (isset($_GET['resend']) && $factor === 'email_otp') {
         $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $_SESSION['mfa_otp']              = password_hash($otp, PASSWORD_BCRYPT, ['cost' => 10]);
         $_SESSION['mfa_otp_expires']      = time() + 600;
-        $_SESSION['mfa_otp_demo_plain']   = $otp;
+        if (app_is_demo_mode()) {
+            $_SESSION['mfa_otp_demo_plain'] = $otp;
+        } else {
+            unset($_SESSION['mfa_otp_demo_plain']);
+        }
         $_SESSION['mfa_otp_resend_count'] = $resendCount + 1;
         $_SESSION['mfa_otp_last_resend']  = time();
-        log_dev_otp($pending['email'], $otp);
+        dispatch_email_otp(
+            (string)$pending['email'],
+            (string)($pending['display_name'] ?? $pending['email'] ?? ''),
+            $otp,
+            600
+        );
         // SECURITY: OTP dispatched via EmailService — never log credentials
         $success = 'A new 6-digit code has been sent to your email.';
     }
@@ -189,10 +202,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // BUG-03 FIX: Log successful MFA completion to audit_log — was never recorded.
         AuditMiddleware::authSuccess(
             $pending['user_id'],
-            $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0',
-            'XX',
+            $pendingIp,
+            $pendingCountry ?? 'XX',
             $authMethod,
-            0
+            0,
+            $pendingRegion
         );
 
         // MFA passed — create JWT token — CAP512 Unit 2: PHP sessions
@@ -204,13 +218,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         set_auth_cookies($token);
         unset($_SESSION['mfa_pending']);
 
-        $clientIp = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        $clientIp = $pendingIp;
 
         // Update DB — CAP512 Unit 7: execute (last_login + reset failures)
         $db->execute(
-            'UPDATE users SET last_login_at = NOW(), last_login_ip = ?, failed_attempts = 0,
-             last_failed_at = NULL WHERE id = ?',
-            [$clientIp, $pending['user_id']]
+            'UPDATE users SET last_login_at = NOW(), last_login_ip = ?, last_login_country = ?,
+             failed_attempts = 0, last_failed_at = NULL WHERE id = ?',
+            [$clientIp, $pendingCountry, $pending['user_id']]
         );
 
         // Insert session record so active_sessions dashboard KPI is accurate
@@ -235,9 +249,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($error) {
         AuditMiddleware::authFailure(
             $pending['email'],
-            $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0',
+            $pendingIp,
             "mfa_failed:{$factor}",
-            0
+            0,
+            $pendingRegion
         );
     }
 }
@@ -260,7 +275,7 @@ if (!empty($pending['user_id'])) {
 $maskedEmail = mask_email($pending['email']);
 $csrf        = csrf_token();
 $demoEmailOtp = '';
-if ($factor === 'email_otp' && (($_ENV['APP_ENV'] ?? 'production') !== 'production')) {
+if ($factor === 'email_otp' && app_is_demo_mode()) {
     $demoEmailOtp = (string)($_SESSION['mfa_otp_demo_plain'] ?? '');
 }
 

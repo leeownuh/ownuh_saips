@@ -77,6 +77,7 @@ $clientIp = (function(): string {
     // Default: use direct connection IP
     return filter_var($remoteAddr, FILTER_VALIDATE_IP) ? $remoteAddr : '0.0.0.0';
 })();
+$geo = resolve_geo_from_ip($clientIp);
 
 // ── IP checks ────────────────────────────────────────────────────────────────
 $ipCheck->check($clientIp);
@@ -96,7 +97,7 @@ if (!$email || !$password) {
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     // Same generic error — don't reveal whether email exists
-    _failAuth($email, $clientIp, 'invalid_format', 0, $rateLimit, $pdo);
+    _failAuth($email, $clientIp, 'invalid_format', 0, $rateLimit, $pdo, $geo['region'] ?? null);
 }
 
 // ── User lookup ──────────────────────────────────────────────────────────────
@@ -118,7 +119,7 @@ if ($delay > 0) {
 if (!$user) {
     // Run a dummy bcrypt to prevent timing attacks
     password_verify($password, '$2y$12$dummyhashtopreventtimingattacks1234567890123456789012');
-    _failAuth($email, $clientIp, 'user_not_found', 0, $rateLimit, $pdo);
+    _failAuth($email, $clientIp, 'user_not_found', 0, $rateLimit, $pdo, $geo['region'] ?? null);
 }
 
 // Fetch hash from isolated credentials DB
@@ -137,7 +138,7 @@ if (!$cred || !password_verify($password, $cred['password_hash'])) {
     // Check lockout thresholds
     _checkLockout($pdo, $user, $attempt, $clientIp, $secConfig);
 
-    AuditMiddleware::authFailure($email, $clientIp, 'bad_password', $attempt);
+    AuditMiddleware::authFailure($email, $clientIp, 'bad_password', $attempt, $geo['region'] ?? null);
     http_response_code(401);
     echo json_encode(['status' => 'error', 'code' => 'UNAUTHORIZED', 'message' => 'Invalid credentials.']);
     exit;
@@ -145,19 +146,30 @@ if (!$cred || !password_verify($password, $cred['password_hash'])) {
 
 // ── Account status check ─────────────────────────────────────────────────
 if ($user['status'] === 'locked') {
-    AuditMiddleware::authFailure($email, $clientIp, 'account_locked', 0);
+    AuditMiddleware::authFailure($email, $clientIp, 'account_locked', 0, $geo['region'] ?? null);
     http_response_code(401);
     echo json_encode(['status' => 'error', 'code' => 'ACCOUNT_LOCKED', 'message' => 'Account locked. Contact your administrator.']);
     exit;
 }
 if ($user['status'] === 'suspended') {
-    AuditMiddleware::authFailure($email, $clientIp, 'account_suspended', 0);
+    AuditMiddleware::authFailure($email, $clientIp, 'account_suspended', 0, $geo['region'] ?? null);
     http_response_code(403);
     echo json_encode(['status' => 'error', 'code' => 'ACCOUNT_SUSPENDED', 'message' => 'Account suspended.']);
     exit;
 }
 
 // ── Upgrade bcrypt cost if needed (SRS §2.3) ────────────────────────────
+if ($user['status'] === 'pending') {
+    AuditMiddleware::authFailure($email, $clientIp, 'account_pending_approval', 0, $geo['region'] ?? null);
+    http_response_code(403);
+    echo json_encode([
+        'status' => 'error',
+        'code' => 'ACCOUNT_PENDING',
+        'message' => 'Account pending administrator approval.',
+    ]);
+    exit;
+}
+
 if ($cred['bcrypt_cost'] < $secConfig['password']['bcrypt_upgrade_to']) {
     $newHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => $secConfig['password']['bcrypt_upgrade_to']]);
     $pdoAuth->prepare('UPDATE credentials SET password_hash = ?, bcrypt_cost = ? WHERE user_id = ?')
@@ -166,6 +178,8 @@ if ($cred['bcrypt_cost'] < $secConfig['password']['bcrypt_upgrade_to']) {
 
 // ── Risk engine ─────────────────────────────────────────────────────────
 $countryCode = $ipCheck->getCountryCode($clientIp);
+$countryCode = $countryCode ?? ($geo['country'] ?? null);
+$region = $geo['region'] ?? null;
 $isTor       = $ipCheck->isTorExitNode($clientIp);
 $riskScore   = _calculateRisk($user, $clientIp, $countryCode, $deviceFP, $isTor, $redis);
 
@@ -178,7 +192,7 @@ $rateLimit->resetFailures($email);
 
 // ── High risk — block ────────────────────────────────────────────────────
 if ($riskScore >= 80) {
-    AuditMiddleware::authFailure($email, $clientIp, 'high_risk_blocked', 0);
+    AuditMiddleware::authFailure($email, $clientIp, 'high_risk_blocked', 0, $region);
     http_response_code(403);
     echo json_encode(['status' => 'error', 'code' => 'ACCESS_DENIED', 'message' => 'Login denied. Contact your administrator.']);
     exit;
@@ -192,6 +206,7 @@ if ($riskScore >= 40 || $user['mfa_enrolled']) {
         'risk_score'  => $riskScore,
         'ip'          => $clientIp,
         'country'     => $countryCode,
+        'region'      => $region,
         'device_fp'   => $deviceFP,
     ]));
 
@@ -199,7 +214,12 @@ if ($riskScore >= 40 || $user['mfa_enrolled']) {
     if ($user['mfa_factor'] === 'email_otp') {
         $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $redis->setex("saips:email_otp:{$user['id']}", 600, $otp);
-        log_dev_otp($user['email'], $otp);
+        dispatch_email_otp(
+            (string)$user['email'],
+            (string)($user['display_name'] ?? $user['email'] ?? ''),
+            $otp,
+            600
+        );
         // OTP dispatched via EmailService in production.
     }
 
@@ -215,7 +235,7 @@ if ($riskScore >= 40 || $user['mfa_enrolled']) {
 // ── Issue tokens ─────────────────────────────────────────────────────────
 [$accessToken, $refreshToken] = _issueTokens($user, $clientIp, $deviceFP, null, $pdo, $redis, $secConfig);
 
-AuditMiddleware::authSuccess($user['id'], $clientIp, $countryCode ?? 'XX', 'none', $riskScore);
+AuditMiddleware::authSuccess($user['id'], $clientIp, $countryCode ?? 'XX', 'none', $riskScore, $region);
 
 echo json_encode([
     'status'        => 'success',
@@ -233,7 +253,7 @@ echo json_encode([
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function _failAuth(string $email, string $ip, string $reason, int $attempt, $rl, $db): never
+function _failAuth(string $email, string $ip, string $reason, int $attempt, $rl, $db, ?string $region = null): never
 {
     try {
         $db->prepare(
@@ -243,7 +263,7 @@ function _failAuth(string $email, string $ip, string $reason, int $attempt, $rl,
     } catch (Throwable $e) {
         error_log('[SAIPS] Failed to record login_attempt: ' . $e->getMessage());
     }
-    AuditMiddleware::authFailure($email, $ip, $reason, $attempt);
+    AuditMiddleware::authFailure($email, $ip, $reason, $attempt, $region);
     http_response_code(401);
     echo json_encode(['status' => 'error', 'code' => 'UNAUTHORIZED', 'message' => 'Invalid credentials.']);
     exit;

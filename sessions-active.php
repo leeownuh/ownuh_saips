@@ -4,6 +4,7 @@ require_once __DIR__ . '/backend/bootstrap.php';
 $user = require_auth('admin');
 $db   = Database::getInstance();
 $csrf = csrf_token();
+$demoReadOnly = app_is_demo_mode();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -38,9 +39,15 @@ $csrf = csrf_token();
                         <li class="breadcrumb-item active">Active Sessions</li>
                     </ol></nav>
                 </div>
-                <a href="sessions-revoke.php" class="btn btn-sm btn-danger">
-                    <i class="ri-logout-box-r-line me-1"></i>Revoke Sessions
-                </a>
+                <?php if ($demoReadOnly): ?>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
+                        <i class="ri-eye-line me-1"></i>Demo Read-Only
+                    </button>
+                <?php else: ?>
+                    <a href="sessions-revoke.php" class="btn btn-sm btn-danger">
+                        <i class="ri-logout-box-r-line me-1"></i>Revoke Sessions
+                    </a>
+                <?php endif; ?>
             </div>
 
 <?php
@@ -52,12 +59,36 @@ $userSessions  = array_filter($sessions, fn($s) => !in_array($s['role'], ['admin
 $idleSessions  = array_filter($sessions, fn($s) => (int)$s['idle_minutes'] > 14);
 
 // CAP512 Unit 7: DB aggregate
-$stats = $db->fetchOne(
-    'SELECT COUNT(*) as total,
-            SUM(TIMESTAMPDIFF(MINUTE, IFNULL(last_used_at,created_at), NOW()) > 14) as idle
-     FROM sessions WHERE invalidated_at IS NULL AND expires_at > NOW()'
-);
+$statsSql = 'SELECT COUNT(*) as total,
+            SUM(TIMESTAMPDIFF(MINUTE, IFNULL(s.last_used_at,s.created_at), NOW()) > 14) as idle
+     FROM sessions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.invalidated_at IS NULL AND s.expires_at > NOW()';
+$statsParams = [];
+$statsTypes = '';
+
+if ($demoReadOnly) {
+    $seedUserIds = app_demo_seed_user_ids();
+    $statsSql .= ' AND u.id IN (' . implode(',', array_fill(0, count($seedUserIds), '?')) . ')';
+    $statsParams = $seedUserIds;
+    $statsTypes = str_repeat('s', count($seedUserIds));
+}
+
+$stats = $db->fetchOne($statsSql, $statsParams, $statsTypes);
 ?>
+
+            <?php if ($demoReadOnly): ?>
+            <div class="alert border-0 shadow-sm mb-4" style="background:linear-gradient(135deg,rgba(15,39,64,0.96) 0%, rgba(32,87,112,0.94) 100%); color:#f4f7fb;">
+                <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
+                    <div>
+                        <div class="text-uppercase text-white text-opacity-75 fw-semibold fs-12 mb-1">Demo-safe Session Story</div>
+                        <div class="fw-semibold text-white mb-1">This view is intentionally read-only.</div>
+                        <div class="text-white text-opacity-75 small">Recruiters can inspect session hygiene, MFA coverage, and idle-session controls without being able to revoke or interfere with live access.</div>
+                    </div>
+                    <a href="audit-log.php" class="btn btn-light btn-sm"><i class="ri-file-search-line me-1"></i>Next: Audit Trail</a>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <div class="row g-3 mb-4">
                 <?php
@@ -96,7 +127,7 @@ $stats = $db->fetchOne(
                             <?php if (empty($sessions)): ?>
                                 <tr><td colspan="8" class="text-center text-muted py-5">No active sessions. Users are logged out.</td></tr>
                             <?php else: ?>
-                            <?php foreach ($sessions as $s):
+                                <?php foreach ($sessions as $s):
                                 $idle     = (int)$s['idle_minutes'];
                                 $isAdmin  = in_array($s['role'], ['admin','superadmin']);
                                 $rowClass = $isAdmin ? 'table-primary bg-opacity-25' : '';
@@ -122,11 +153,17 @@ $stats = $db->fetchOne(
                                         </span>
                                     </td>
                                     <td>
-                                        <form method="POST" action="sessions-revoke.php" class="d-inline">
-                                            <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
-                                            <input type="hidden" name="session_id" value="<?= esc($s['id']) ?>">
-                                            <button type="submit" class="btn btn-light-danger icon-btn-sm" title="Revoke this session"><i class="ri-logout-box-r-line"></i></button>
-                                        </form>
+                                        <?php if ($demoReadOnly): ?>
+                                            <button type="button" class="btn btn-light-secondary icon-btn-sm" title="Disabled in demo mode" disabled>
+                                                <i class="ri-eye-off-line"></i>
+                                            </button>
+                                        <?php else: ?>
+                                            <form method="POST" action="sessions-revoke.php" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                                                <input type="hidden" name="session_id" value="<?= esc($s['id']) ?>">
+                                                <button type="submit" class="btn btn-light-danger icon-btn-sm" title="Revoke this session"><i class="ri-logout-box-r-line"></i></button>
+                                            </form>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

@@ -4,6 +4,15 @@
  * CAP512 Unit II: Embedding PHP in web pages
  */
 if (!isset($user)) $user = [];
+if (function_exists('app_demo_present_user')) {
+    $user = app_demo_present_user($user);
+}
+$themeScriptPath = dirname(__DIR__, 2) . '/assets/js/theme-fullscreen-fix.js';
+$searchScriptPath = dirname(__DIR__, 2) . '/assets/js/header-search.js';
+$themeCssPath = dirname(__DIR__, 2) . '/assets/css/theme-fixes.css';
+$themeScriptVersion = file_exists($themeScriptPath) ? (string)filemtime($themeScriptPath) : '1';
+$searchScriptVersion = file_exists($searchScriptPath) ? (string)filemtime($searchScriptPath) : '1';
+$themeCssVersion = file_exists($themeCssPath) ? (string)filemtime($themeCssPath) : '1';
 ?>
 <!-- START HEADER -->
     <header class="app-header">
@@ -75,6 +84,12 @@ if (!isset($user)) $user = [];
                             </div>
                         </div>
                     </div>
+
+                    <?php if (function_exists('app_is_demo_mode') && app_is_demo_mode()): ?>
+                    <span class="badge bg-warning-subtle text-warning border border-warning d-none d-md-inline-flex align-items-center">
+                        <i class="ri-presentation-line me-1"></i>Recruiter Demo
+                    </span>
+                    <?php endif; ?>
                 </div>
 
                 <div class="header-right hstack gap-3">
@@ -88,11 +103,12 @@ if (!isset($user)) $user = [];
                         
 
                         <!-- Theme -->
-                        <div class="dropdown features-dropdown d-none d-sm-block">
+                        <div class="dropdown features-dropdown">
                             <button type="button" class="btn icon-btn btn-text-primary rounded-circle"
+                                id="theme-mode-button"
                                 data-bs-toggle="dropdown" aria-expanded="false">
                                 <span class="visually-hidden">Light or Dark Mode Switch</span>
-                                <i class="ri-sun-line fs-20"></i>
+                                <i class="ri-contrast-2-line fs-20"></i>
                             </button>
 
                             <div class="dropdown-menu dropdown-menu-end header-language-scrollable" data-simplebar>
@@ -113,7 +129,7 @@ if (!isset($user)) $user = [];
                         </div>
                         <!-- Fullscreen -->
                         <button type="button" id="fullscreen-button"
-                            class="btn icon-btn btn-text-primary rounded-circle custom-toggle d-none d-sm-block"
+                            class="btn icon-btn btn-text-primary rounded-circle custom-toggle"
                             aria-pressed="false">
                             <span class="visually-hidden">Toggle Fullscreen</span>
                             <span class="icon-on">
@@ -167,6 +183,6 @@ if (!isset($user)) $user = [];
 
     </header>
     <!-- END HEADER -->
-    <script src="assets/js/theme-fullscreen-fix.js"></script>
-    <script src="assets/js/header-search.js"></script>
-    <link href="assets/css/theme-fixes.css" rel="stylesheet">
+    <script src="assets/js/theme-fullscreen-fix.js?v=<?= htmlspecialchars($themeScriptVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
+    <script src="assets/js/header-search.js?v=<?= htmlspecialchars($searchScriptVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
+    <link href="assets/css/theme-fixes.css?v=<?= htmlspecialchars($themeCssVersion, ENT_QUOTES, 'UTF-8') ?>" rel="stylesheet">

@@ -23,12 +23,458 @@ function load_env(string $path): void {
     }
 }
 load_env(__DIR__ . '/config/.env');
+
+function app_env(): string {
+    return strtolower(trim((string)($_ENV['APP_ENV'] ?? 'production')));
+}
+
+function env_flag(string $key, bool $default = false): bool {
+    $value = $_ENV[$key] ?? getenv($key);
+    if ($value === false || $value === null || $value === '') {
+        return $default;
+    }
+
+    return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on'], true);
+}
+
+function app_is_development(): bool {
+    return app_env() === 'development';
+}
+
+function app_demo_available(): bool {
+    return env_flag('DEMO_MODE', false);
+}
+
+function app_request_is_https(): bool {
+    $trustedProxy = $_ENV['TRUSTED_PROXY'] ?? '';
+    $remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
+    $proxyTrusted = ($trustedProxy !== '')
+                 && ($trustedProxy === 'any' || $remoteAddr === $trustedProxy);
+
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['SERVER_PORT'] ?? 80) == 443)
+        || ($proxyTrusted && ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+}
+
+function app_cookie_samesite(): string {
+    $trustedProxy = $_ENV['TRUSTED_PROXY'] ?? '';
+    $remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
+    $proxyTrusted = ($trustedProxy !== '')
+                 && ($trustedProxy === 'any' || $remoteAddr === $trustedProxy);
+
+    $configured = trim((string)($_ENV['COOKIE_SAMESITE'] ?? ''));
+    if ($configured !== '') {
+        return $configured;
+    }
+
+    return $proxyTrusted ? 'Lax' : 'Strict';
+}
+
+function app_has_experience_choice(): bool {
+    if (!app_demo_available()) {
+        return false;
+    }
+
+    $mode = strtolower(trim((string)($_COOKIE['saips_experience_mode'] ?? '')));
+    return in_array($mode, ['demo', 'production'], true);
+}
+
+function app_experience_mode(): string {
+    if (!app_demo_available()) {
+        return 'production';
+    }
+
+    $mode = strtolower(trim((string)($_COOKIE['saips_experience_mode'] ?? '')));
+    return in_array($mode, ['demo', 'production'], true) ? $mode : 'production';
+}
+
+function app_is_demo_mode(): bool {
+    return app_demo_available() && app_experience_mode() === 'demo';
+}
+
+function app_set_experience_mode(string $mode, int $ttlSeconds = 2592000): void {
+    if (!app_demo_available() || !in_array($mode, ['demo', 'production'], true)) {
+        return;
+    }
+
+    setcookie('saips_experience_mode', $mode, [
+        'expires'  => time() + max(300, $ttlSeconds),
+        'path'     => '/',
+        'secure'   => app_request_is_https(),
+        'httponly' => true,
+        'samesite' => app_cookie_samesite(),
+    ]);
+
+    $_COOKIE['saips_experience_mode'] = $mode;
+}
+
+function app_demo_seed_accounts(): array {
+    return [
+        [
+            'id' => 'usr-demo-lucia-0000-0000-00000000001',
+            'display_name' => 'Lucia Alvarez',
+            'email' => 'lucia.alvarez@ownuh-saips.com',
+            'password' => 'Admin@SAIPS2025!',
+            'role' => 'admin',
+            'story' => 'Balanced walkthrough with email OTP, dashboard, audit, and executive reporting.',
+        ],
+        [
+            'id' => 'usr-demo-sophia-0000-0000-0000000001',
+            'display_name' => 'Sophia Johnson',
+            'email' => 'sophia.johnson@ownuh-saips.com',
+            'password' => 'Admin@SAIPS2025!',
+            'role' => 'superadmin',
+            'story' => 'Leadership path with alerting, policy controls, and executive-ready posture reporting.',
+        ],
+        [
+            'id' => 'usr-002-0000-0000-0000-000000000002',
+            'display_name' => 'Marcus Chen',
+            'email' => 'marcus.chen@ownuh-saips.com',
+            'password' => 'Admin@SAIPS2025!',
+            'role' => 'admin',
+            'story' => 'Operations-focused path with RBAC, incidents, and admin workflows.',
+        ],
+    ];
+}
+
+function app_demo_default_account(): array {
+    return app_demo_seed_accounts()[0];
+}
+
+function app_demo_seed_user_ids(): array {
+    return [
+        'usr-demo-sophia-0000-0000-0000000001',
+        'usr-002-0000-0000-0000-000000000002',
+        'usr-003-0000-0000-0000-000000000003',
+        'usr-004-0000-0000-0000-000000000004',
+        'usr-005-0000-0000-0000-000000000005',
+        'usr-006-0000-0000-0000-000000000006',
+        'usr-007-0000-0000-0000-000000000007',
+        'usr-008-0000-0000-0000-000000000008',
+        'usr-009-0000-0000-0000-000000000009',
+        'usr-demo-lucia-0000-0000-00000000001',
+    ];
+}
+
+function app_demo_seed_emails(): array {
+    return [
+        'sophia.johnson@ownuh-saips.com',
+        'marcus.chen@ownuh-saips.com',
+        'priya.patel@ownuh-saips.com',
+        'james.harris@ownuh-saips.com',
+        'alex.rivera@ownuh-saips.com',
+        'nina.schultz@ownuh-saips.com',
+        'omar.farouk@ownuh-saips.com',
+        'ava.thompson@ownuh-saips.com',
+        'rahul.mehta@ownuh-saips.com',
+        'lucia.alvarez@ownuh-saips.com',
+    ];
+}
+
+function app_demo_role_identity(string $role = 'user'): array {
+    return match (strtolower(trim($role))) {
+        'superadmin' => ['display_name' => 'Sophia Johnson', 'email' => 'sophia.johnson@ownuh-saips.com'],
+        'admin' => ['display_name' => 'Lucia Alvarez', 'email' => 'lucia.alvarez@ownuh-saips.com'],
+        'manager' => ['display_name' => 'Priya Patel', 'email' => 'priya.patel@ownuh-saips.com'],
+        default => ['display_name' => 'James Harris', 'email' => 'james.harris@ownuh-saips.com'],
+    };
+}
+
+function app_demo_is_seed_email(?string $email): bool {
+    $email = strtolower(trim((string)$email));
+    return $email !== '' && in_array($email, app_demo_seed_emails(), true);
+}
+
+function app_demo_is_documentation_ip(?string $ip): bool {
+    return preg_match('/^(203\.0\.113|198\.51\.100|192\.0\.2)\.\d{1,3}$/', trim((string)$ip)) === 1;
+}
+
+function app_demo_token_seed(): string {
+    $seed = trim((string)($_ENV['DEMO_TOKEN_SEED'] ?? ($_ENV['APP_NAME'] ?? 'ownuh-saips-demo')));
+    return $seed !== '' ? $seed : 'ownuh-saips-demo';
+}
+
+function app_demo_tokenize(string $value, string $prefix = 'DMO', int $length = 6): string {
+    $value = strtolower(trim($value));
+    $length = max(4, min(12, $length));
+
+    if ($value === '') {
+        return strtoupper($prefix) . '-' . str_repeat('0', $length);
+    }
+
+    $digest = strtoupper(substr(hash_hmac('sha256', $value, app_demo_token_seed()), 0, $length));
+    return strtoupper($prefix) . '-' . $digest;
+}
+
+function app_demo_is_tokenized_label(?string $value, string $prefix): bool {
+    $value = strtoupper(trim((string)$value));
+    return $value !== '' && preg_match('/^' . preg_quote(strtoupper($prefix), '/') . '-[A-F0-9]{4,12}$/', $value) === 1;
+}
+
+function app_demo_is_tokenized_email(?string $email): bool {
+    $email = strtolower(trim((string)$email));
+    return $email !== '' && str_ends_with($email, '@ownuh-saips.invalid');
+}
+
+function app_demo_role_title(string $role = 'user'): string {
+    return match (strtolower(trim($role))) {
+        'superadmin' => 'Executive Persona',
+        'admin' => 'Administrator Persona',
+        'manager' => 'Operations Persona',
+        default => 'User Persona',
+    };
+}
+
+function app_demo_role_email_slug(string $role = 'user'): string {
+    return match (strtolower(trim($role))) {
+        'superadmin' => 'executive',
+        'admin' => 'admin',
+        'manager' => 'ops',
+        default => 'user',
+    };
+}
+
+function app_demo_safe_identity(?string $email, ?string $displayName = '', string $role = 'user'): array {
+    $email = trim((string)$email);
+    $displayName = trim((string)$displayName);
+
+    if (!app_is_demo_mode()) {
+        return [
+            'display_name' => $displayName,
+            'email' => $email,
+        ];
+    }
+
+    if (app_demo_is_seed_email($email) || app_demo_is_tokenized_email($email)) {
+        return [
+            'display_name' => $displayName !== '' ? $displayName : strtok($email, '@'),
+            'email' => strtolower($email),
+        ];
+    }
+
+    $tokenBase = $email !== '' ? $email : ($displayName !== '' ? $displayName : $role);
+    $token = app_demo_tokenize($tokenBase, 'USR', 6);
+    $safeEmail = sprintf(
+        '%s.%s@ownuh-saips.invalid',
+        app_demo_role_email_slug($role),
+        strtolower(str_replace('-', '', $token))
+    );
+
+    return [
+        'display_name' => $displayName !== '' && str_contains($displayName, 'Persona')
+            ? $displayName
+            : app_demo_role_title($role) . ' ' . $token,
+        'email' => $safeEmail,
+    ];
+}
+
+function app_demo_safe_email(?string $email, string $role = 'user'): string {
+    return app_demo_safe_identity($email, '', $role)['email'];
+}
+
+function app_demo_safe_name(?string $displayName, ?string $email = '', string $role = 'user'): string {
+    return app_demo_safe_identity($email, $displayName, $role)['display_name'];
+}
+
+function app_demo_safe_ip(?string $ip): string {
+    $ip = trim((string)$ip);
+    if (!app_is_demo_mode() || $ip === '') {
+        return $ip;
+    }
+
+    if (app_demo_is_documentation_ip($ip)) {
+        return $ip;
+    }
+
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        return '2001:db8::' . dechex((abs(crc32($ip)) % 4095) + 1);
+    }
+
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        return $ip;
+    }
+
+    $prefixes = ['203.0.113.', '198.51.100.', '192.0.2.'];
+    $prefix = $prefixes[abs(crc32('saips:' . $ip)) % count($prefixes)];
+    $lastOctet = (abs(crc32($ip)) % 200) + 20;
+
+    return $prefix . $lastOctet;
+}
+
+function app_demo_safe_identifier(?string $value, string $prefix): string {
+    $value = trim((string)$value);
+    if (!app_is_demo_mode() || $value === '' || app_demo_is_tokenized_label($value, $prefix)) {
+        return $value;
+    }
+
+    return app_demo_tokenize($value, $prefix, 6);
+}
+
+function app_demo_safe_text(string $text): string {
+    if (!app_is_demo_mode() || $text === '') {
+        return $text;
+    }
+
+    $text = preg_replace_callback(
+        '/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i',
+        static fn(array $match): string => app_demo_safe_email($match[0]),
+        $text
+    );
+
+    $text = preg_replace_callback(
+        '/\b(?:\d{1,3}\.){3}\d{1,3}\b/',
+        static fn(array $match): string => app_demo_safe_ip($match[0]),
+        $text
+    ) ?? $text;
+
+    $text = preg_replace_callback(
+        '/\busr-[A-Za-z0-9-]{8,64}\b/i',
+        static fn(array $match): string => app_demo_safe_identifier($match[0], 'USR'),
+        $text
+    ) ?? $text;
+
+    return preg_replace_callback(
+        '/\b(?:session|sess|sid)[-_][A-Za-z0-9-]{4,64}\b/i',
+        static fn(array $match): string => app_demo_safe_identifier($match[0], 'SES'),
+        $text
+    ) ?? $text;
+}
+
+function app_demo_safe_array(array $payload): array {
+    if (!app_is_demo_mode()) {
+        return $payload;
+    }
+
+    $safe = [];
+    foreach ($payload as $key => $value) {
+        $keyString = strtolower((string)$key);
+
+        if (is_array($value)) {
+            $safe[$key] = app_demo_safe_array($value);
+            continue;
+        }
+
+        if (!is_string($value)) {
+            $safe[$key] = $value;
+            continue;
+        }
+
+        if (str_contains($keyString, 'email')) {
+            $safe[$key] = app_demo_safe_email($value);
+        } elseif (in_array($keyString, ['source_ip', 'ip', 'ip_address', 'last_login_ip'], true)) {
+            $safe[$key] = app_demo_safe_ip($value);
+        } elseif (str_contains($keyString, 'user_id') || $keyString === 'admin_id') {
+            $safe[$key] = app_demo_safe_identifier($value, 'USR');
+        } elseif (str_contains($keyString, 'session')) {
+            $safe[$key] = app_demo_safe_identifier($value, 'SES');
+        } elseif (str_contains($keyString, 'token') || str_contains($keyString, 'hash')) {
+            $safe[$key] = app_demo_safe_identifier($value, 'TOK');
+        } else {
+            $safe[$key] = app_demo_safe_text($value);
+        }
+    }
+
+    return $safe;
+}
+
+function app_demo_safe_details(mixed $details): mixed {
+    if (!app_is_demo_mode() || $details === null || $details === '') {
+        return $details;
+    }
+
+    if (is_string($details)) {
+        $decoded = json_decode($details, true);
+        if (is_array($decoded)) {
+            return json_encode(app_demo_safe_array($decoded), JSON_UNESCAPED_SLASHES);
+        }
+        return app_demo_safe_text($details);
+    }
+
+    if (is_array($details)) {
+        return app_demo_safe_array($details);
+    }
+
+    return $details;
+}
+
+function app_demo_present_user(array $user): array {
+    if (!app_is_demo_mode()) {
+        return $user;
+    }
+
+    $identity = app_demo_safe_identity(
+        (string)($user['email'] ?? ''),
+        (string)($user['display_name'] ?? ''),
+        (string)($user['role'] ?? 'user')
+    );
+
+    $user['display_name'] = $identity['display_name'];
+    $user['email'] = $identity['email'];
+
+    return $user;
+}
+
+function app_demo_present_user_row(array $user): array {
+    if (!app_is_demo_mode()) {
+        return $user;
+    }
+
+    $user = app_demo_present_user($user);
+
+    if (isset($user['last_login_ip'])) {
+        $user['last_login_ip'] = app_demo_safe_ip((string)$user['last_login_ip']);
+    }
+
+    if (!empty($user['mfa_bypass_token'])) {
+        $user['mfa_bypass_token'] = app_demo_safe_identifier((string)$user['mfa_bypass_token'], 'TOK');
+    }
+
+    return $user;
+}
+
+function app_demo_present_session_row(array $session): array {
+    if (!app_is_demo_mode()) {
+        return $session;
+    }
+
+    $identity = app_demo_safe_identity(
+        (string)($session['email'] ?? ''),
+        (string)($session['display_name'] ?? ''),
+        (string)($session['role'] ?? 'user')
+    );
+
+    $session['display_name'] = $identity['display_name'];
+    $session['email'] = $identity['email'];
+    $session['ip_address'] = app_demo_safe_ip((string)($session['ip_address'] ?? ''));
+    $session['demo_session_label'] = app_demo_safe_identifier((string)($session['id'] ?? ''), 'SES');
+
+    return $session;
+}
+
+function app_demo_present_audit_row(array $entry): array {
+    if (!app_is_demo_mode()) {
+        return $entry;
+    }
+
+    $identity = app_demo_safe_identity(
+        (string)($entry['email'] ?? ''),
+        (string)($entry['display_name'] ?? ''),
+        (string)($entry['role'] ?? 'user')
+    );
+
+    $entry['display_name'] = $identity['display_name'];
+    $entry['email'] = $identity['email'];
+    $entry['source_ip'] = app_demo_safe_ip((string)($entry['source_ip'] ?? ''));
+    $entry['details'] = app_demo_safe_details($entry['details'] ?? '');
+
+    return $entry;
+}
 // Error reporting: never display errors in production (information disclosure)
 error_reporting(E_ALL);
 ini_set('display_errors', '0');        // ALWAYS off — errors go to log only
 ini_set('display_startup_errors', '0');
 ini_set('log_errors', '1');
-if (($_ENV['APP_ENV'] ?? 'production') === 'development') {
+if (app_is_development()) {
     // In development, you may enable display_errors via php.ini or CLI only
     // Do NOT set display_errors=1 here — it leaks stack traces to browsers
 }
@@ -40,19 +486,12 @@ if (session_status() === PHP_SESSION_NONE) {
     // SECURITY: only trust X-Forwarded-Proto from a known proxy IP.
     // Set TRUSTED_PROXY=any in .env when behind ngrok / a load balancer,
     // or set TRUSTED_PROXY=127.0.0.1 to restrict to localhost proxy only.
-    $trustedProxy = $_ENV['TRUSTED_PROXY'] ?? '';
-    $remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
-    $proxyTrusted = ($trustedProxy !== '')
-                 && ($trustedProxy === 'any' || $remoteAddr === $trustedProxy);
-
-    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || (($_SERVER['SERVER_PORT'] ?? 80) == 443)
-            || ($proxyTrusted && ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $isHttps = app_request_is_https();
 
     // SameSite=Lax required when the app is accessed through a tunnel/proxy
     // (e.g. ngrok) because the login redirect is technically cross-origin.
     // Override via COOKIE_SAMESITE env var. Defaults: Lax behind proxy, Strict direct.
-    $sameSite = $_ENV['COOKIE_SAMESITE'] ?? ($proxyTrusted ? 'Lax' : 'Strict');
+    $sameSite = app_cookie_samesite();
 
     ini_set('session.cookie_httponly', '1');
     ini_set('session.cookie_secure',   $isHttps ? '1' : '0');
@@ -616,16 +1055,34 @@ function get_security_posture_snapshot(): array {
 
 function get_recent_audit(int $limit = 10): array {
     $db = Database::getInstance();
-    return $db->fetchAll(
+
+    $where = '';
+    $params = [$limit];
+    $types = 'i';
+
+    if (app_is_demo_mode()) {
+        $seedUserIds = app_demo_seed_user_ids();
+        $seedPlaceholders = implode(',', array_fill(0, count($seedUserIds), '?'));
+        $where = 'WHERE (al.user_id IN (' . $seedPlaceholders . ') OR (al.user_id IS NULL AND (al.source_ip LIKE ? OR al.source_ip LIKE ? OR al.source_ip LIKE ?)))';
+        $params = array_merge($seedUserIds, ['203.0.113.%', '198.51.100.%', '192.0.2.%', $limit]);
+        $types = str_repeat('s', count($seedUserIds) + 3) . 'i';
+    }
+
+    $rows = $db->fetchAll(
         'SELECT al.id, al.event_code, al.event_name, al.user_id,
                 u.display_name, u.email,
-                al.source_ip, al.country_code, al.mfa_method,
+                al.source_ip, al.country_code, al.region, al.mfa_method,
                 al.risk_score, al.details, al.created_at
          FROM audit_log al
          LEFT JOIN users u ON u.id = al.user_id
+         ' . $where . '
          ORDER BY al.id DESC LIMIT ?',
-        [$limit], 'i'
+        $params, $types
     );
+
+    return app_is_demo_mode()
+        ? array_map('app_demo_present_audit_row', $rows)
+        : $rows;
 }
 
 function saips_guest_user(string $label = 'Guest'): array {
@@ -678,6 +1135,13 @@ function get_users(string $status = '', string $search = '', int $limit = 100): 
     $params = [];
     $types  = '';
 
+    if (app_is_demo_mode()) {
+        $seedUserIds = app_demo_seed_user_ids();
+        $where[] = 'id IN (' . implode(',', array_fill(0, count($seedUserIds), '?')) . ')';
+        $params = array_merge($params, $seedUserIds);
+        $types .= str_repeat('s', count($seedUserIds));
+    }
+
     // CAP512 Unit 3: Control flow — conditional query building
     if ($status) {
         $where[]  = 'status = ?';
@@ -693,7 +1157,7 @@ function get_users(string $status = '', string $search = '', int $limit = 100): 
     $params[] = $limit;
     $types   .= 'i';
 
-    return $db->fetchAll(
+    $rows = $db->fetchAll(
         'SELECT id, display_name, email, role, status, mfa_enrolled, mfa_factor,
                 failed_attempts, last_login_at, last_login_ip, last_login_country,
                 created_at, password_changed_at
@@ -702,6 +1166,10 @@ function get_users(string $status = '', string $search = '', int $limit = 100): 
          LIMIT ?',
         $params, $types
     );
+
+    return app_is_demo_mode()
+        ? array_map('app_demo_present_user_row', $rows)
+        : $rows;
 }
 
 /**
@@ -709,14 +1177,38 @@ function get_users(string $status = '', string $search = '', int $limit = 100): 
  */
 function get_blocked_ips(int $limit = 50): array {
     $db = Database::getInstance();
-    return $db->fetchAll(
+
+    $where = 'unblocked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())';
+    $params = [$limit];
+    $types = 'i';
+
+    if (app_is_demo_mode()) {
+        $where .= ' AND (ip_address LIKE ? OR ip_address LIKE ? OR ip_address LIKE ?)';
+        $params = ['203.0.113.%', '198.51.100.%', '192.0.2.%', $limit];
+        $types = 'sssi';
+    }
+
+    $rows = $db->fetchAll(
         'SELECT id, ip_address, block_type, trigger_rule, country_code,
                 threat_feed, blocked_at, expires_at
          FROM blocked_ips
-         WHERE unblocked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())
+         WHERE ' . $where . '
          ORDER BY blocked_at DESC LIMIT ?',
-        [$limit], 'i'
+        $params, $types
     );
+
+    if (!app_is_demo_mode()) {
+        return $rows;
+    }
+
+    foreach ($rows as &$row) {
+        $row['ip_address'] = app_demo_safe_ip((string)($row['ip_address'] ?? ''));
+        $row['trigger_rule'] = app_demo_safe_text((string)($row['trigger_rule'] ?? ''));
+        $row['threat_feed'] = app_demo_safe_text((string)($row['threat_feed'] ?? ''));
+    }
+    unset($row);
+
+    return $rows;
 }
 
 /**
@@ -736,7 +1228,7 @@ function get_incidents(string $status = '', int $limit = 50): array {
     $params[] = $limit;
     $types   .= 'i';
 
-    return $db->fetchAll(
+    $rows = $db->fetchAll(
         'SELECT i.*, u1.email as reporter_email, u2.email as assignee_email
          FROM incidents i
          LEFT JOIN users u1 ON u1.id = i.reported_by
@@ -748,6 +1240,21 @@ function get_incidents(string $status = '', int $limit = 50): array {
          LIMIT ?',
         $params, $types
     );
+
+    if (!app_is_demo_mode()) {
+        return $rows;
+    }
+
+    foreach ($rows as &$row) {
+        $row['reporter_email'] = app_demo_safe_email((string)($row['reporter_email'] ?? ''), 'manager');
+        $row['assignee_email'] = app_demo_safe_email((string)($row['assignee_email'] ?? ''), 'admin');
+        if (isset($row['details'])) {
+            $row['details'] = app_demo_safe_details($row['details']);
+        }
+    }
+    unset($row);
+
+    return $rows;
 }
 
 /**
@@ -755,7 +1262,21 @@ function get_incidents(string $status = '', int $limit = 50): array {
  */
 function get_active_sessions(int $limit = 100): array {
     $db = Database::getInstance();
-    return $db->fetchAll(
+    $where = 's.invalidated_at IS NULL AND s.expires_at > NOW()';
+    $params = [];
+    $types = '';
+
+    if (app_is_demo_mode()) {
+        $seedUserIds = app_demo_seed_user_ids();
+        $where .= ' AND u.id IN (' . implode(',', array_fill(0, count($seedUserIds), '?')) . ')';
+        $params = array_merge($params, $seedUserIds);
+        $types .= str_repeat('s', count($seedUserIds));
+    }
+
+    $params[] = $limit;
+    $types .= 'i';
+
+    $rows = $db->fetchAll(
         'SELECT s.id, s.user_id, u.display_name, u.email, u.role,
                 s.ip_address, s.mfa_method, s.created_at, s.expires_at,
                 s.last_used_at,
@@ -765,11 +1286,15 @@ function get_active_sessions(int $limit = 100): array {
 ) as idle_minutes
          FROM sessions s
          JOIN users u ON u.id = s.user_id
-         WHERE s.invalidated_at IS NULL AND s.expires_at > NOW()
+         WHERE ' . $where . '
          ORDER BY FIELD(u.role,"superadmin","admin","manager","user"), s.created_at DESC
          LIMIT ?',
-        [$limit], 'i'
+        $params, $types
     );
+
+    return app_is_demo_mode()
+        ? array_map('app_demo_present_session_row', $rows)
+        : $rows;
 }
 
 /**
@@ -817,6 +1342,10 @@ function get_monthly_auth_trend(int $months = 9): array {
  * Get login origin heatmap data for the vector map — CAP512 Unit 7 + Unit 5
  */
 function get_login_origins(): array {
+    if (app_is_demo_mode()) {
+        return ['AU' => 6, 'US' => 3, 'GB' => 2, 'IN' => 2, 'SG' => 2, 'DE' => 1, 'CA' => 1];
+    }
+
     $db   = Database::getInstance();
     $rows = $db->fetchAll(
         'SELECT country_code, COUNT(*) as logins
@@ -859,7 +1388,7 @@ function verify_csrf(?string $token): bool {
 }
 
 function log_dev_otp(string $email, string $otp): void {
-    if (($_ENV['APP_ENV'] ?? 'production') === 'production') {
+    if (!app_is_development() && !app_is_demo_mode()) {
         return;
     }
 
@@ -872,6 +1401,177 @@ function log_dev_otp(string $email, string $otp): void {
     );
 
     @file_put_contents(__DIR__ . '/../logs/dev-otp.log', $line, FILE_APPEND | LOCK_EX);
+}
+
+function dispatch_email_otp(string $email, string $displayName, string $otp, int $ttlSeconds = 600): array {
+    $email = trim($email);
+    if ($email === '') {
+        return [
+            'success' => false,
+            'error' => 'Missing recipient email address.',
+            'code' => 'MISSING_RECIPIENT',
+        ];
+    }
+
+    if (app_is_development() || app_is_demo_mode()) {
+        log_dev_otp($email, $otp);
+    }
+
+    $emailService = new \SAIPS\Services\EmailService([
+        'provider' => $_ENV['EMAIL_PROVIDER'] ?? 'smtp',
+        'app_name' => $_ENV['APP_NAME'] ?? 'Ownuh SAIPS',
+        'from_name' => $_ENV['EMAIL_FROM_NAME'] ?? 'Ownuh SAIPS',
+        'from_email' => $_ENV['EMAIL_FROM_EMAIL'] ?? 'security@ownuh-saips.com',
+        'reply_to' => $_ENV['EMAIL_REPLY_TO'] ?? ($_ENV['EMAIL_FROM_EMAIL'] ?? 'security@ownuh-saips.com'),
+        'sendgrid_api_key' => $_ENV['SENDGRID_API_KEY'] ?? '',
+    ]);
+
+    $minutes = max(1, (int)ceil($ttlSeconds / 60));
+    $result = $emailService->sendTemplate($email, 'email_otp', [
+        'display_name' => trim($displayName) !== '' ? $displayName : $email,
+        'otp_code' => $otp,
+        'expires_in' => sprintf('%d minute%s', $minutes, $minutes === 1 ? '' : 's'),
+    ], [
+        'queue' => false,
+    ]);
+
+    if (($result['success'] ?? false) !== true) {
+        error_log(sprintf(
+            '[SAIPS] Failed to send email OTP to %s: %s',
+            $email,
+            $result['error'] ?? 'unknown error'
+        ));
+
+        if (app_is_development()) {
+            return [
+                'success' => true,
+                'message' => 'OTP logged for development mode.',
+                'delivery' => 'dev-log',
+            ];
+        }
+    }
+
+    return $result;
+}
+
+/**
+ * Resolve the client IP with trusted-proxy safeguards.
+ * Mirrors AuditMiddleware::getClientIp so login/MFA pages log consistent IPs.
+ */
+function resolve_client_ip(): string {
+    $remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
+    $trustedProxy = $_ENV['TRUSTED_PROXY'] ?? '';
+    $proxyTrusted = $trustedProxy !== ''
+                 && ($trustedProxy === 'any' || $remoteAddr === $trustedProxy);
+
+    if ($proxyTrusted) {
+        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR'] as $key) {
+            if (!empty($_SERVER[$key])) {
+                $ip = trim(explode(',', $_SERVER[$key])[0]);
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    return $ip;
+                }
+            }
+        }
+    }
+
+    return filter_var($remoteAddr, FILTER_VALIDATE_IP) ? $remoteAddr : '0.0.0.0';
+}
+
+/**
+ * Resolve geo metadata from an IP (best-effort).
+ * Returns ISO country code and optional region if GeoIP is available.
+ */
+function resolve_geo_from_ip(string $ip): array {
+    $country = null;
+    $region  = null;
+
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+        return ['country' => null, 'region' => null];
+    }
+
+    $geoDbPath = $_ENV['GEOIP_DB_PATH'] ?? '';
+    if ($geoDbPath !== '') {
+        if ($geoDbPath[0] !== '/' && !preg_match('/^[A-Za-z]:\\\\/', $geoDbPath)) {
+            $geoDbPath = __DIR__ . '/../' . ltrim($geoDbPath, '/');
+        }
+        if (is_file($geoDbPath)) {
+            if (!class_exists('\\GeoIp2\\Database\\Reader')) {
+                $autoload = __DIR__ . '/../vendor/autoload.php';
+                if (is_file($autoload)) {
+                    require_once $autoload;
+                }
+            }
+            if (class_exists('\\GeoIp2\\Database\\Reader')) {
+                try {
+                    $reader = new \GeoIp2\Database\Reader($geoDbPath);
+                    $record = $reader->city($ip);
+                    $country = $record->country->isoCode ?? $country;
+                    $region = $record->mostSpecificSubdivision->name
+                        ?? $record->mostSpecificSubdivision->isoCode
+                        ?? $region;
+                    $reader->close();
+                } catch (Throwable $e) {
+                    // Fall through to other lookup methods
+                }
+            }
+        }
+    }
+
+    if (function_exists('geoip_record_by_name')) {
+        $record = @geoip_record_by_name($ip);
+        if (is_array($record)) {
+            $country = $record['country_code'] ?? null;
+            $region  = $record['region'] ?? null;
+        }
+    }
+
+    if (!$country && function_exists('geoip_country_code_by_name')) {
+        $country = geoip_country_code_by_name($ip) ?: null;
+    }
+
+    if (!$country && $region === null) {
+        $provider = $_ENV['GEOIP_PROVIDER'] ?? 'ip-api';
+        $timeout  = (int)($_ENV['GEOIP_HTTP_TIMEOUT'] ?? 2);
+        $url = '';
+
+        if ($provider === 'ipapi') {
+            $url = "https://ipapi.co/{$ip}/json/";
+        } else {
+            $url = "http://ip-api.com/json/{$ip}?fields=status,countryCode,region,regionName";
+        }
+
+        $ctx = stream_context_create([
+            'http' => [
+                'timeout' => $timeout,
+                'method' => 'GET',
+                'header' => "User-Agent: Ownuh-SAIPS/1.0\r\n",
+            ],
+            'https' => [
+                'timeout' => $timeout,
+                'method' => 'GET',
+                'header' => "User-Agent: Ownuh-SAIPS/1.0\r\n",
+            ],
+        ]);
+
+        $resp = @file_get_contents($url, false, $ctx);
+        if (is_string($resp) && $resp !== '') {
+            $data = json_decode($resp, true);
+            if (is_array($data)) {
+                if ($provider === 'ipapi') {
+                    $country = $data['country'] ?? $country;
+                    $region  = $data['region'] ?? $data['region_code'] ?? $region;
+                } else {
+                    if (($data['status'] ?? '') === 'success') {
+                        $country = $data['countryCode'] ?? $country;
+                        $region  = $data['regionName'] ?? $data['region'] ?? $region;
+                    }
+                }
+            }
+        }
+    }
+
+    return ['country' => $country, 'region' => $region];
 }
 
 // ── Image helper functions (CAP512 Unit 7: Graphics) ─────────────────────────
@@ -982,6 +1682,82 @@ function get_audit_pdo(): \PDO {
     return $pdo;
 }
 
+/**
+ * Credentials DB helper used by account creation and password-management flows.
+ */
+function get_auth_pdo(): \PDO {
+    static $pdo = null;
+
+    if ($pdo !== null) {
+        try {
+            $pdo->query('SELECT 1');
+            return $pdo;
+        } catch (\PDOException $e) {
+            $pdo = null;
+        }
+    }
+
+    $dbConfig = require __DIR__ . '/config/database.php';
+    $cfg      = $dbConfig['auth'];
+
+    $dsn = sprintf(
+        'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
+        $cfg['host'],
+        (int)($cfg['port'] ?? 3306),
+        $cfg['name'] ?? 'ownuh_credentials'
+    );
+
+    try {
+        $pdo = new \PDO($dsn, $cfg['user'], $cfg['pass'], $cfg['options']);
+    } catch (\PDOException $e) {
+        error_log('[SAIPS DB] get_auth_pdo() failed: ' . $e->getMessage());
+        throw new \RuntimeException('Credentials database unavailable.');
+    }
+
+    return $pdo;
+}
+
+/**
+ * Provision or replace the active bcrypt credential for a user and mirror it
+ * into password history for reuse-prevention checks.
+ */
+function provision_user_credentials(
+    string $userId,
+    string $plainPassword,
+    ?\PDO $pdoAuth = null,
+    ?int $bcryptCost = null
+): array {
+    $pdoAuth ??= get_auth_pdo();
+    $bcryptCost = max(10, min(15, $bcryptCost ?? (int)($_ENV['BCRYPT_COST'] ?? 12)));
+    $passwordHash = password_hash($plainPassword, PASSWORD_BCRYPT, ['cost' => $bcryptCost]);
+
+    if (!is_string($passwordHash) || $passwordHash === '') {
+        throw new \RuntimeException('Failed to hash password.');
+    }
+
+    $stmt = $pdoAuth->prepare(
+        'INSERT INTO credentials (user_id, password_hash, bcrypt_cost)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            password_hash = VALUES(password_hash),
+            bcrypt_cost = VALUES(bcrypt_cost)'
+    );
+    $stmt->execute([$userId, $passwordHash, $bcryptCost]);
+
+    try {
+        get_audit_pdo()->prepare(
+            'INSERT INTO password_history (user_id, password_hash) VALUES (?, ?)'
+        )->execute([$userId, $passwordHash]);
+    } catch (Throwable $e) {
+        error_log('[SAIPS] Failed to append password history for user ' . $userId . ': ' . $e->getMessage());
+    }
+
+    return [
+        'password_hash' => $passwordHash,
+        'bcrypt_cost' => $bcryptCost,
+    ];
+}
+
 // Autoload AuditMiddleware for PHP-session pages that require bootstrap.php
 if (!class_exists('SAIPS\\Middleware\\AuditMiddleware')) {
     require_once __DIR__ . '/Middleware/AuditMiddleware.php';
@@ -1059,22 +1835,11 @@ function create_jwt_token(array $user, int $ttl = 900): string {
  * Set authentication cookies — SRS §3.4
  */
 function set_auth_cookies(string $accessToken): void {
-    $trustedProxy = $_ENV['TRUSTED_PROXY'] ?? '';
-    $remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
-    $proxyTrusted = ($trustedProxy !== '')
-                 && ($trustedProxy === 'any' || $remoteAddr === $trustedProxy);
-
-    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-             || (($_SERVER['SERVER_PORT'] ?? 80) == 443)
-             || ($proxyTrusted && ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-
-    $sameSite = $_ENV['COOKIE_SAMESITE'] ?? ($proxyTrusted ? 'Lax' : 'Strict');
-
     setcookie('saips_access', $accessToken, [
         'expires'  => time() + 900,
         'path'     => '/',
-        'secure'   => $isHttps,
+        'secure'   => app_request_is_https(),
         'httponly' => true,
-        'samesite' => $sameSite,
+        'samesite' => app_cookie_samesite(),
     ]);
 }

@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  php-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - name: Validate composer metadata
+        run: composer validate --no-check-publish
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Audit locked dependencies
+        run: composer audit --locked
+
+      - name: Run repo guard checks
+        run: php tests/run.php
+
+      - name: Lint PHP files
+        run: php tests/php-lint.php
+
+      - name: Scan for committed secrets
+        run: php tests/secret-scan.php

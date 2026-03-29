@@ -182,7 +182,7 @@ $pdo->prepare(
     $pdo, $redis, $secConfig
 );
 
-AuditMiddleware::authSuccess($user['id'], $pending['ip'], $pending['country'] ?? 'XX', $factor, $pending['risk_score'] ?? 0);
+AuditMiddleware::authSuccess($user['id'], $pending['ip'], $pending['country'] ?? 'XX', $factor, $pending['risk_score'] ?? 0, $pending['region'] ?? null);
 
 echo json_encode([
     'status'        => 'success',

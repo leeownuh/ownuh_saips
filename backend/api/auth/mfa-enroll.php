@@ -222,9 +222,12 @@ function _enrollEmailOtp(string $userId, PDO $pdo, Redis $redis, array $config):
     $testOtp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
     $redis->setex("saips:email_otp_test:{$userId}", 300, $testOtp);
     
-    // Send email (using EmailService when implemented)
-    // For now, log it
-    // Test OTP dispatched via EmailService — never log credentials in production
+    dispatch_email_otp(
+        (string)$user['email'],
+        (string)($user['display_name'] ?? $user['email'] ?? ''),
+        $testOtp,
+        300
+    );
     
     return ['success' => true, 'message' => 'Email OTP enrolled. A test code has been sent to your email.'];
 }

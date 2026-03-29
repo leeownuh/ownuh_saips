@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     const root = document.documentElement;
     const fullscreenButton = document.getElementById("fullscreen-button");
+    const themeToggleButton = document.getElementById("theme-mode-button");
     const themeButtons = {
         light: document.getElementById("light-theme"),
         dark: document.getElementById("dark-theme"),
@@ -23,8 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function syncThemeButtonIcon() {
-        const button = document.querySelector(".features-dropdown .btn.icon-btn");
-        const icon = button?.querySelector("i");
+        const icon = themeToggleButton?.querySelector("i");
         if (!icon) {
             return;
         }

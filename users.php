@@ -12,13 +12,45 @@ $db     = Database::getInstance();
 $search = trim($_GET['search'] ?? '');
 $status = trim($_GET['status'] ?? '');
 $page   = max(1, (int)($_GET['page'] ?? 1));
+$demoReadOnly = app_is_demo_mode();
 $flashBypass = $_SESSION['flash_mfa_bypass'] ?? null;
 $flashUser = $_SESSION['flash_user_created'] ?? null;
+$flashDemo = $_SESSION['flash_demo_read_only'] ?? null;
 unset($_SESSION['flash_mfa_bypass']);
 unset($_SESSION['flash_user_created']);
+unset($_SESSION['flash_demo_read_only']);
+
+if ($demoReadOnly && is_array($flashBypass)) {
+    $flashIdentity = app_demo_safe_identity(
+        (string)($flashBypass['email'] ?? ''),
+        (string)($flashBypass['display_name'] ?? ''),
+        'admin'
+    );
+    $flashBypass['display_name'] = $flashIdentity['display_name'];
+    $flashBypass['email'] = $flashIdentity['email'];
+    if (!empty($flashBypass['token'])) {
+        $flashBypass['token'] = app_demo_safe_identifier((string)$flashBypass['token'], 'TOK');
+    }
+}
+
+if ($demoReadOnly && is_array($flashUser)) {
+    $flashIdentity = app_demo_safe_identity(
+        (string)($flashUser['email'] ?? ''),
+        (string)($flashUser['display_name'] ?? ''),
+        (string)($flashUser['role'] ?? 'user')
+    );
+    $flashUser['display_name'] = $flashIdentity['display_name'];
+    $flashUser['email'] = $flashIdentity['email'];
+}
 
 // POST: handle quick actions (lock/unlock/reset)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($demoReadOnly) {
+        $_SESSION['flash_demo_read_only'] = 'Demo experience is view-only. User lifecycle controls stay visible for storytelling, but live changes are disabled.';
+        header('Location: users.php?status=' . urlencode($status) . '&search=' . urlencode($search) . '&page=' . $page);
+        exit;
+    }
+
     if (!verify_csrf($_POST['csrf_token'] ?? null)) {
         http_response_code(403);
         die('CSRF token mismatch.');
@@ -80,25 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         try {
-            $dbConfig = require __DIR__ . '/backend/config/database.php';
-            $authDsn = sprintf(
-                'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
-                $dbConfig['auth']['host'],
-                (int)($dbConfig['auth']['port'] ?? 3306),
-                $dbConfig['auth']['name']
-            );
-            $authPdo = new PDO(
-                $authDsn,
-                $dbConfig['auth']['user'],
-                $dbConfig['auth']['pass'],
-                $dbConfig['auth']['options']
-            );
-            $passwordHash = password_hash($defaultPassword, PASSWORD_BCRYPT, ['cost' => $bcryptCost]);
-            $stmt = $authPdo->prepare(
-                'INSERT INTO credentials (user_id, password_hash, bcrypt_cost)
-                 VALUES (?, ?, ?)'
-            );
-            $stmt->execute([$newUserId, $passwordHash, $bcryptCost]);
+            provision_user_credentials($newUserId, $defaultPassword, null, $bcryptCost);
         } catch (Throwable $e) {
             $db->execute('DELETE FROM users WHERE id = ?', [$newUserId]);
             error_log('[SAIPS] Failed to create default credentials for new user: ' . $e->getMessage());
@@ -230,14 +244,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $users = get_users($status, $search, 100);
 
 // User stats — CAP512 Unit 7: aggregation
-$stats = $db->fetchOne(
-    'SELECT COUNT(*) as total,
+$statsSql = 'SELECT COUNT(*) as total,
             SUM(status="active") as active,
             SUM(status="locked") as locked,
             SUM(status="pending") as pending,
             SUM(mfa_enrolled=0) as no_mfa
-     FROM users WHERE deleted_at IS NULL'
-);
+     FROM users WHERE deleted_at IS NULL';
+$statsParams = [];
+$statsTypes = '';
+
+if ($demoReadOnly) {
+    $seedUserIds = app_demo_seed_user_ids();
+    $statsSql .= ' AND id IN (' . implode(',', array_fill(0, count($seedUserIds), '?')) . ')';
+    $statsParams = $seedUserIds;
+    $statsTypes = str_repeat('s', count($seedUserIds));
+}
+
+$stats = $db->fetchOne($statsSql, $statsParams, $statsTypes);
 
 // Paginate — CAP512 Unit 5: array functions
 $paginated = paginate($users, $page, 20);
@@ -275,10 +298,36 @@ $users = $paginated['items'];
                         <li class="breadcrumb-item active">User Management</li>
                     </ol></nav>
                 </div>
+                <?php if ($demoReadOnly): ?>
+                <button class="btn btn-sm btn-outline-secondary" type="button" disabled>
+                    <i class="ri-eye-line me-1"></i>Demo Read-Only
+                </button>
+                <?php else: ?>
                 <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
                     <i class="ri-user-add-line me-1"></i>Add User
                 </button>
+                <?php endif; ?>
             </div>
+
+            <?php if ($demoReadOnly): ?>
+            <div class="alert border-0 shadow-sm mb-4" style="background:linear-gradient(135deg,rgba(15,39,64,0.96) 0%, rgba(43,91,68,0.94) 100%); color:#f4f7fb;">
+                <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
+                    <div>
+                        <div class="text-uppercase text-white text-opacity-75 fw-semibold fs-12 mb-1">Demo-safe User Story</div>
+                        <div class="fw-semibold text-white mb-1">Identity data is tokenised and controls are view-only.</div>
+                        <div class="text-white text-opacity-75 small">Walk visitors through roles, MFA readiness, login history, and audit pivots without exposing your live team or letting anyone mutate the environment.</div>
+                    </div>
+                    <a href="settings-compliance.php" class="btn btn-light btn-sm"><i class="ri-file-chart-line me-1"></i>Next: Compliance</a>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($flashDemo): ?>
+            <div class="alert alert-warning d-flex gap-2 mb-4" role="alert">
+                <i class="ri-information-line flex-shrink-0"></i>
+                <span><?= esc($flashDemo) ?></span>
+            </div>
+            <?php endif; ?>
 
             <?php if ($flashBypass): ?>
             <div class="alert alert-warning d-flex flex-column gap-2 mb-4" role="alert">
@@ -439,7 +488,8 @@ $users = $paginated['items'];
                                                     title="Issue MFA Bypass Token"
                                                     data-user-id="<?= esc($u['id']) ?>"
                                                     data-user-name="<?= esc($u['display_name']) ?>"
-                                                    data-user-email="<?= esc($u['email']) ?>">
+                                                    data-user-email="<?= esc($u['email']) ?>"
+                                                    <?= $demoReadOnly ? 'disabled' : '' ?>>
                                                 <i class="ri-key-2-line"></i>
                                             </button>
                                             <?php if ($u['status'] === 'locked' || $u['status'] === 'suspended'): ?>
@@ -447,7 +497,7 @@ $users = $paginated['items'];
                                                 <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
                                                 <input type="hidden" name="action" value="unlock">
                                                 <input type="hidden" name="user_id" value="<?= esc($u['id']) ?>">
-                                                <button type="submit" class="btn btn-light-success border-success icon-btn-sm" title="Unlock Account">
+                                                <button type="submit" class="btn btn-light-success border-success icon-btn-sm" title="Unlock Account" <?= $demoReadOnly ? 'disabled' : '' ?>>
                                                     <i class="ri-lock-unlock-line"></i>
                                                 </button>
                                             </form>
@@ -456,7 +506,7 @@ $users = $paginated['items'];
                                                 <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
                                                 <input type="hidden" name="action" value="lock">
                                                 <input type="hidden" name="user_id" value="<?= esc($u['id']) ?>">
-                                                <button type="submit" class="btn btn-light-warning border-warning icon-btn-sm" title="Lock Account">
+                                                <button type="submit" class="btn btn-light-warning border-warning icon-btn-sm" title="Lock Account" <?= $demoReadOnly ? 'disabled' : '' ?>>
                                                     <i class="ri-lock-line"></i>
                                                 </button>
                                             </form>
@@ -466,7 +516,7 @@ $users = $paginated['items'];
                                                 <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
                                                 <input type="hidden" name="action" value="delete">
                                                 <input type="hidden" name="user_id" value="<?= esc($u['id']) ?>">
-                                                <button type="submit" class="btn btn-light-danger border-danger icon-btn-sm" title="Delete User">
+                                                <button type="submit" class="btn btn-light-danger border-danger icon-btn-sm" title="Delete User" <?= $demoReadOnly ? 'disabled' : '' ?>>
                                                     <i class="ri-delete-bin-line"></i>
                                                 </button>
                                             </form>

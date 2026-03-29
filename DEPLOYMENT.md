@@ -40,6 +40,7 @@ For a stronger GitHub first impression, make sure the repo lands with:
 - seeded demo data that matches the screenshots and walkthrough
 - a working public URL or clear local quick start
 - executive reporting and email features configured honestly, not just described
+- the Demo lane enabled if you are sharing via ngrok, so public viewers stay inside the masked, read-only showcase
 
 ---
 
@@ -61,6 +62,7 @@ setup_windows.bat
 ```
 
 By default this imports the recruiter-focused `database/portfolio_seed.sql` dataset and writes `backend/config/.env`.
+Use `.\setup_windows.ps1 -Profile production` to create least-privilege DB users and a production-safe `.env`.
 
 ### Linux
 
@@ -71,6 +73,7 @@ bash install.sh
 ```
 
 By default this also imports `database/portfolio_seed.sql` and writes `backend/config/.env`.
+Use `INSTALL_PROFILE=production bash install.sh` to create least-privilege DB users and a production-safe `.env`.
 
 ### Seed modes
 
@@ -164,12 +167,19 @@ TRUSTED_PROXY=any
 COOKIE_SAMESITE=Lax
 APP_TIMEZONE=Asia/Kolkata
 APP_TIMEZONE_LABEL=IST
+DEMO_MODE=1
 ```
 
 Why:
 - `TRUSTED_PROXY=any` allows forwarded HTTPS headers from ngrok
 - `COOKIE_SAMESITE=Lax` keeps login/session cookies working through the tunnel
 - `APP_URL` should match the public URL used in password-reset flows
+- `DEMO_MODE=1` enables a non-technical Demo vs Production chooser while leaving the core app in production mode
+
+What that buys you:
+- public viewers can choose the guided showcase without touching `.env`
+- demo identities, IPs, and session-like values stay masked or tokenised where needed
+- risky admin controls stay read-only in the public lane
 
 ---
 
@@ -209,6 +219,7 @@ REDIS_PASS=strong_redis_password
 TRUSTED_PROXY=
 COOKIE_SAMESITE=Strict
 BCRYPT_COST=14
+DEMO_MODE=0
 ```
 
 ---
@@ -217,7 +228,8 @@ BCRYPT_COST=14
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `APP_ENV` | `development` | Development or production mode |
+| `APP_ENV` | `production` | Development or production mode |
+| `DEMO_MODE` | `0` | Enables recruiter-demo helpers without changing the core runtime mode |
 | `APP_URL` | `http://localhost:8080` | Public/base URL |
 | `APP_TIMEZONE` | `Asia/Kolkata` | PHP/app timezone |
 | `APP_TIMEZONE_LABEL` | `IST` | Display suffix for timestamps |
@@ -227,6 +239,7 @@ BCRYPT_COST=14
 | `EMAIL_PROVIDER` | `smtp` | Mail backend; `sendgrid` is the easiest fully supported option |
 | `EMAIL_FROM_EMAIL` | app default | Sender used for executive reports and security alerts |
 | `SENDGRID_API_KEY` | empty | Required when `EMAIL_PROVIDER=sendgrid` |
+| `GEOIP_DB_PATH` | empty | Optional GeoLite2 City `.mmdb` path for local region/country lookup |
 | `DB_HOST` | `127.0.0.1` | Main DB host |
 | `DB_AUTH_HOST` | `127.0.0.1` | Credentials DB host |
 | `JWT_PRIVATE_KEY_PATH` | `keys/private.pem` | Private signing key |
@@ -247,8 +260,10 @@ BCRYPT_COST=14
 - [ ] For ngrok: `TRUSTED_PROXY=any` and `COOKIE_SAMESITE=Lax` are set
 - [ ] Password reset flow tested end to end
 - [ ] Executive report generation, history, and export tested once after deploy
+- [ ] PDF export reviewed once to confirm the branded executive layout renders cleanly
 - [ ] Scheduled executive-report cadence and attachment settings reviewed in `settings-compliance.php`
 - [ ] Weekly executive-report email tested with the chosen provider
+- [ ] GeoLite2 database installed if region accuracy is required
 - [ ] At least one alert-rule event tested end to end for email delivery
 - [ ] `auth-create-password.php` tested after sign-in
 - [ ] MFA recovery tested with admin-issued bypass token

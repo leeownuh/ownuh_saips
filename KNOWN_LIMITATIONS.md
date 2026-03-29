@@ -18,6 +18,12 @@ over full production hardening.
 
 The default setup imports `database/portfolio_seed.sql`, which is designed for presentation quality. Some seeded MFA-related records exist to improve admin views and dashboards, not to model every hardware-backed enrollment path end to end.
 
+The recruiter-facing Demo lane also prioritizes safe storytelling over perfect operational parity:
+
+- some values are intentionally masked or tokenised
+- some admin controls are intentionally read-only
+- the goal is to protect the working environment while still showing the product honestly
+
 ### 2. Redis is optional in local setup
 
 Core flows work without Redis in some local scenarios, but certain features are stronger when Redis is present:

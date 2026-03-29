@@ -53,10 +53,14 @@ AI-assisted executive reporting sits on top of these layers as a read-mostly dec
 
 | Role | Required Factor | Notes |
 |---|---|---|
-| Superadmin | FIDO2/WebAuthn only | Hardware key mandatory |
-| Admin | FIDO2/WebAuthn only | Hardware key mandatory |
+| Superadmin | FIDO2/WebAuthn preferred in production | Portfolio seed may use email OTP for demo accessibility |
+| Admin | FIDO2/WebAuthn preferred in production | Portfolio seed may use TOTP or email OTP in local demos |
 | Manager | Any enrolled factor | TOTP recommended |
 | User | Optional (encouraged) | Email OTP minimum if enrolled |
+
+Production expectation:
+- Privileged accounts should be enrolled on FIDO2/WebAuthn hardware keys wherever possible.
+- The recruiter/demo seed keeps alternate factors on some admin personas so the app remains easy to run end to end on a fresh local install.
 
 ### TOTP Parameters
 
@@ -137,7 +141,9 @@ Important operational note:
 - Email-domain migrations intentionally do not rewrite historical `audit_log` records, because mutating old entries would break hash-chain verification.
 
 **Access controls:**
-- `saips_app` DB user: INSERT only on `audit_log` with no UPDATE or DELETE
+- `saips_app` DB user: least-privilege application account for the `ownuh_saips` schema, provisioned by the production installers
+- `saips_auth` DB user: dedicated credentials-store account for the `ownuh_credentials` schema
+- For stricter production segmentation, place audit ingestion behind a separate write-only DB account or service boundary
 - Physical backup replica: read-only, offsite
 
 ---
@@ -157,7 +163,7 @@ Important operational note:
 
 ## Admin Account Controls (SRS Section 6.1)
 
-- FIDO2/WebAuthn hardware key mandatory for all Admin and Superadmin accounts
+- Production target: FIDO2/WebAuthn hardware keys for Admin and Superadmin accounts
 - Sessions expire after **15 minutes idle** and **8 hours absolute**
 - Only **1 concurrent session** permitted per admin account
 - New device or location login triggers immediate email + SMS notification
@@ -190,6 +196,15 @@ Important operational note:
 - Structured output is preferred over free-form generation for predictable rendering
 - If `OPENAI_API_KEY` is absent, the app falls back to a deterministic local summary instead of failing open
 - Weekly executive-report emails are sent only to active `admin` and `superadmin` accounts
+
+---
+
+## Public Demo Guardrails
+
+- `DEMO_MODE=1` is intentionally separate from `APP_ENV`; the app can stay production-configured while still offering a recruiter-safe walkthrough
+- The Demo lane can mask or tokenise non-seed identities, IPs, session-like values, and audit-detail text to avoid leaking live operator context
+- Session revocation and user-management controls are read-only in the Demo lane so public viewers cannot interfere with the working environment
+- The Production lane remains available from the same chooser for honest end-to-end behaviour when you want to show the stricter path
 
 ---
 

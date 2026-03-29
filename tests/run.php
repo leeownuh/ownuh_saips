@@ -20,11 +20,17 @@ $schema = fileText($root . '/database/schema.sql');
 $selfReset = fileText($root . '/backend/api/auth/password-reset.php');
 $confirmReset = fileText($root . '/backend/api/auth/reset-confirm.php');
 $adminReset = fileText($root . '/backend/api/users/password-reset.php');
+$usersApi = fileText($root . '/backend/api/users/list.php');
+$registerApi = fileText($root . '/backend/api/auth/register.php');
+$apiLogin = fileText($root . '/backend/api/auth/login.php');
+$webLogin = fileText($root . '/login.php');
 $setupPs1 = fileText($root . '/setup_windows.ps1');
 $installSh = fileText($root . '/install.sh');
 $readme = fileText($root . '/README.md');
 $quickstart = fileText($root . '/QUICKSTART.md');
 $deployment = fileText($root . '/DEPLOYMENT.md');
+$security = fileText($root . '/SECURITY.md');
+$envExample = fileText($root . '/backend/config/.env.example');
 $setupPhp = fileText($root . '/setup.php');
 $authCreateHtml = fileText($root . '/auth-create-password.html');
 $loginHtml = fileText($root . '/auth-signin.html');
@@ -49,6 +55,10 @@ assertTrue(str_contains($selfReset, 'password_resets'), 'Self-service password r
 assertTrue(str_contains($confirmReset, 'password_resets'), 'Reset confirmation must use password_resets.', $failures);
 assertTrue(str_contains($adminReset, 'password_resets'), 'Admin password reset must use password_resets.', $failures);
 assertTrue(!str_contains($adminReset, 'password_reset_tokens'), 'Admin password reset must no longer use password_reset_tokens.', $failures);
+assertTrue(str_contains($usersApi, 'provision_user_credentials'), 'API user creation must provision credentials.', $failures);
+assertTrue(str_contains($registerApi, 'provision_user_credentials'), 'Self-service registration must provision credentials.', $failures);
+assertTrue(str_contains($apiLogin, 'ACCOUNT_PENDING'), 'API login must surface pending-account status after password verification.', $failures);
+assertTrue(str_contains($webLogin, 'pending administrator approval'), 'Web login must explain pending-account status after password verification.', $failures);
 
 assertTrue(str_contains($setupPs1, 'portfolio_seed.sql'), 'Windows setup must default to portfolio_seed.sql.', $failures);
 assertTrue(str_contains($installSh, 'portfolio_seed.sql'), 'Linux setup must default to portfolio_seed.sql.', $failures);
@@ -58,6 +68,23 @@ assertTrue(str_contains($installSh, 'lucia.alvarez@ownuh-saips.com'), 'Linux set
 assertTrue(str_contains($readme, 'setup_windows.ps1'), 'README must document Windows setup script.', $failures);
 assertTrue(str_contains($quickstart, 'install.sh'), 'QUICKSTART must document Linux setup script.', $failures);
 assertTrue(str_contains($deployment, 'setup_windows.ps1'), 'DEPLOYMENT must document scripted setup.', $failures);
+assertTrue(str_contains($readme, 'DEMO_MODE=1'), 'README must document demo mode for ngrok demos.', $failures);
+assertTrue(str_contains($deployment, 'DEMO_MODE=1'), 'DEPLOYMENT must document demo mode for ngrok demos.', $failures);
+assertTrue(str_contains($readme, 'Demo vs Production chooser'), 'README must explain the recruiter experience chooser.', $failures);
+assertTrue(str_contains($deployment, 'Demo vs Production chooser'), 'DEPLOYMENT must explain the recruiter experience chooser.', $failures);
+assertTrue(str_contains($readme, '-Profile production'), 'README must mention production install profile for Windows.', $failures);
+assertTrue(str_contains($quickstart, 'INSTALL_PROFILE=production'), 'QUICKSTART must mention production install profile for Linux.', $failures);
+assertTrue(str_contains($deployment, 'INSTALL_PROFILE=production'), 'DEPLOYMENT must mention production install profile for Linux.', $failures);
+
+assertTrue(str_contains($envExample, 'APP_ENV=production'), '.env.example must default to production mode.', $failures);
+assertTrue(str_contains($envExample, 'DEMO_MODE=0'), '.env.example must document the demo-mode toggle.', $failures);
+assertTrue(str_contains($envExample, 'DB_USER=saips_app'), '.env.example must use least-privilege main DB user defaults.', $failures);
+assertTrue(str_contains($envExample, 'DB_AUTH_USER=saips_auth'), '.env.example must use least-privilege auth DB user defaults.', $failures);
+assertTrue(str_contains($envExample, 'BCRYPT_COST=14'), '.env.example must default to bcrypt cost 14.', $failures);
+assertTrue(str_contains($envExample, 'COOKIE_SAMESITE=Strict'), '.env.example must default to SameSite=Strict.', $failures);
+
+assertTrue(str_contains($security, 'Portfolio seed may use email OTP for demo accessibility'), 'SECURITY.md must explain demo MFA variance for superadmin.', $failures);
+assertTrue(str_contains($security, 'Portfolio seed may use TOTP or email OTP in local demos'), 'SECURITY.md must explain demo MFA variance for admin.', $failures);
 
 assertTrue(str_contains($setupPhp, 'setup.php is retired.'), 'setup.php must be clearly retired.', $failures);
 assertTrue(str_contains($authCreateHtml, 'auth-create-password.php'), 'auth-create-password.html must redirect to auth-create-password.php.', $failures);

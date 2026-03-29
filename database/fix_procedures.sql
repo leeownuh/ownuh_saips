@@ -6,10 +6,15 @@
 --   PROCEDURE ownuh_saips.sp_insert_audit_log does not exist
 --
 -- This file is safe to run multiple times (DROP IF EXISTS).
--- It does NOT touch any table data.
+-- It adds the audit_log region column if missing, but does not modify rows.
 -- ============================================================
 
 USE ownuh_saips;
+
+-- Ensure audit_log has region column for geo lookups
+ALTER TABLE audit_log
+    ADD COLUMN IF NOT EXISTS region VARCHAR(100) NULL DEFAULT NULL
+    AFTER country_code;
 
 -- ── Drop existing procedures so we can recreate cleanly ───────────────────────
 DROP PROCEDURE IF EXISTS sp_insert_audit_log;
@@ -32,6 +37,7 @@ CREATE PROCEDURE sp_insert_audit_log(
     IN p_source_ip      VARCHAR(45),
     IN p_user_agent     TEXT,
     IN p_country_code   CHAR(2),
+    IN p_region         VARCHAR(100),
     IN p_mfa_method     VARCHAR(20),
     IN p_risk_score     TINYINT UNSIGNED,
     IN p_details        JSON,
@@ -65,11 +71,11 @@ BEGIN
 
     INSERT INTO audit_log (
         event_code, event_name, user_id, source_ip, user_agent,
-        country_code, mfa_method, risk_score, details,
+        country_code, region, mfa_method, risk_score, details,
         admin_id, target_user_id, entry_hash, prev_hash
     ) VALUES (
         p_event_code, p_event_name, p_user_id, p_source_ip, p_user_agent,
-        p_country_code, p_mfa_method, p_risk_score, p_details,
+        p_country_code, p_region, p_mfa_method, p_risk_score, p_details,
         p_admin_id, p_target_user_id, v_entry_hash, v_prev_hash
     );
 END //

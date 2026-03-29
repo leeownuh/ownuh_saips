@@ -29,6 +29,7 @@ class AuditMiddleware
      * @param string|null $sourceIp     Request IP address
      * @param string|null $userAgent    HTTP User-Agent header
      * @param string|null $countryCode  ISO 3166-1 alpha-2
+     * @param string|null $region       Region/state/province name
      * @param string|null $mfaMethod    'fido2','totp','email_otp','sms','backup_code'
      * @param int|null    $riskScore    0–100
      * @param array|null  $details      Event-specific data per SRS §4.1
@@ -46,7 +47,8 @@ class AuditMiddleware
         ?int    $riskScore   = null,
         array|string|null $details = null,
         ?string $adminId     = null,
-        ?string $targetUserId = null
+        ?string $targetUserId = null,
+        ?string $region       = null
     ): void {
         if (!self::$db) {
             error_log('[SAIPS Audit] Database not initialised');
@@ -59,7 +61,7 @@ class AuditMiddleware
             $normalizedDetails = self::normalizeDetails($details);
 
             $stmt = self::$db->prepare(
-                'CALL sp_insert_audit_log(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'CALL sp_insert_audit_log(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $eventCode,
@@ -68,6 +70,7 @@ class AuditMiddleware
                 $resolvedSourceIp,
                 $resolvedUserAgent,
                 $countryCode,
+                $region,
                 $mfaMethod,
                 $riskScore,
                 $normalizedDetails,
@@ -84,6 +87,7 @@ class AuditMiddleware
                         $resolvedSourceIp ?? $sourceIp ?? self::getClientIp(),
                         $resolvedUserAgent ?? $userAgent ?? ($_SERVER['HTTP_USER_AGENT'] ?? null),
                         $countryCode,
+                        $region,
                         $mfaMethod,
                         $riskScore,
                         $normalizedDetails ?? self::normalizeDetails($details),
@@ -112,20 +116,26 @@ class AuditMiddleware
     /**
      * Convenience wrappers for common event types
      */
-    public static function authSuccess(string $userId, string $ip, string $country, string $mfa, int $risk): void
+    public static function authSuccess(string $userId, string $ip, string $country, string $mfa, int $risk, ?string $region = null): void
     {
-        self::log('AUTH-001', 'Successful Login', $userId, $ip, null, $country, $mfa, $risk, [
-            'timestamp' => date('c'),
-        ]);
+        $details = ['timestamp' => date('c')];
+        if ($region) {
+            $details['region'] = $region;
+        }
+        self::log('AUTH-001', 'Successful Login', $userId, $ip, null, $country, $mfa, $risk, $details, null, null, $region);
     }
 
-    public static function authFailure(string $username, string $ip, string $reason, int $attempt): void
+    public static function authFailure(string $username, string $ip, string $reason, int $attempt, ?string $region = null): void
     {
-        self::log('AUTH-002', 'Failed Login Attempt', null, $ip, null, null, null, null, [
+        $details = [
             'username_attempted' => $username,
             'failure_reason'     => $reason,
             'attempt_count'      => $attempt,
-        ]);
+        ];
+        if ($region) {
+            $details['region'] = $region;
+        }
+        self::log('AUTH-002', 'Failed Login Attempt', null, $ip, null, null, null, null, $details, null, null, $region);
     }
 
     public static function accountLocked(string $userId, string $lockType, string $triggerRule, string $adminId = null): void
@@ -315,6 +325,7 @@ class AuditMiddleware
         ?string $sourceIp,
         ?string $userAgent,
         ?string $countryCode,
+        ?string $region,
         ?string $mfaMethod,
         ?int $riskScore,
         ?string $detailsJson,
@@ -336,9 +347,9 @@ class AuditMiddleware
         $stmt = self::$db->prepare(
             'INSERT INTO audit_log (
                 event_code, event_name, user_id, source_ip, user_agent,
-                country_code, mfa_method, risk_score, details,
+                country_code, region, mfa_method, risk_score, details,
                 admin_id, target_user_id, entry_hash, prev_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             $eventCode,
@@ -347,6 +358,7 @@ class AuditMiddleware
             $sourceIp,
             $userAgent,
             $countryCode,
+            $region,
             $mfaMethod,
             $riskScore,
             $detailsJson,

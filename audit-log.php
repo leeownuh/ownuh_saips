@@ -60,6 +60,13 @@ if ($filters['to_date']) {
     $types   .= 's';
 }
 
+if (app_is_demo_mode()) {
+    $seedUserIds = app_demo_seed_user_ids();
+    $where[]  = '(al.user_id IN (' . implode(',', array_fill(0, count($seedUserIds), '?')) . ') OR (al.user_id IS NULL AND (al.source_ip LIKE ? OR al.source_ip LIKE ? OR al.source_ip LIKE ?)))';
+    $params   = array_merge($params, $seedUserIds, ['203.0.113.%', '198.51.100.%', '192.0.2.%']);
+    $types   .= str_repeat('s', count($seedUserIds) + 3);
+}
+
 $whereStr = implode(' AND ', $where);
 
 // CAP512 Unit 5: CSV export handler
@@ -67,21 +74,24 @@ if (!empty($_GET['export']) && $_GET['export'] === '1') {
     $exportRows = $db->fetchAll(
         "SELECT al.id, al.event_code, al.event_name,
                 u.display_name, u.email,
-                al.source_ip, al.country_code, al.mfa_method,
+                al.source_ip, al.country_code, al.region, al.mfa_method,
                 al.risk_score, al.details, al.created_at
          FROM audit_log al
          LEFT JOIN users u ON u.id = al.user_id
          WHERE {$whereStr}
-         ORDER BY al.id DESC
+        ORDER BY al.id DESC
          LIMIT 10000",
         $params, $types
     );
+    if (app_is_demo_mode()) {
+        $exportRows = array_map('app_demo_present_audit_row', $exportRows);
+    }
     $filename = 'audit_log_' . date('Ymd_His') . '.csv';
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Cache-Control: no-cache, no-store, must-revalidate');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['ID','Event Code','Event Name','User','Email','Source IP','Country','MFA Method','Risk Score','Details','Timestamp']);
+    fputcsv($out, ['ID','Event Code','Event Name','User','Email','Source IP','Country','Region','MFA Method','Risk Score','Details','Timestamp']);
     foreach ($exportRows as $row) {
         fputcsv($out, [
             $row['id'],
@@ -91,6 +101,7 @@ if (!empty($_GET['export']) && $_GET['export'] === '1') {
             $row['email'] ?? '',
             $row['source_ip'],
             $row['country_code'],
+            $row['region'],
             $row['mfa_method'],
             $row['risk_score'],
             $row['details'],
@@ -113,7 +124,7 @@ $pageTypes   = $types . 'ii';
 $entries = $db->fetchAll(
     "SELECT al.id, al.event_code, al.event_name, al.user_id,
             u.display_name, u.email,
-            al.source_ip, al.country_code, al.mfa_method,
+            al.source_ip, al.country_code, al.region, al.mfa_method,
             al.risk_score, al.details, al.created_at,
             al.entry_hash, al.admin_id
      FROM audit_log al
@@ -123,16 +134,30 @@ $entries = $db->fetchAll(
      LIMIT ? OFFSET ?",
     $pageParams, $pageTypes
 );
+if (app_is_demo_mode()) {
+    $entries = array_map('app_demo_present_audit_row', $entries);
+}
 
 // Stats for the summary cards — CAP512 Unit 7: aggregation
-$dayStats = $db->fetchOne(
-    'SELECT
+$dayStatsSql = 'SELECT
         SUM(event_code="AUTH-001") as success,
         SUM(event_code="AUTH-002") as failed,
         SUM(event_code="AUTH-003") as locked,
         SUM(event_code LIKE "IPS-%") as ips_events
-     FROM audit_log WHERE created_at >= NOW() - INTERVAL 24 HOUR'
-);
+     FROM audit_log al
+     WHERE al.created_at >= NOW() - INTERVAL 24 HOUR';
+$dayStatsParams = [];
+$dayStatsTypes = '';
+
+if (app_is_demo_mode()) {
+    $seedUserIds = app_demo_seed_user_ids();
+    $dayStatsSql .= ' AND (al.user_id IN (' . implode(',', array_fill(0, count($seedUserIds), '?')) . ')
+        OR (al.user_id IS NULL AND (al.source_ip LIKE ? OR al.source_ip LIKE ? OR al.source_ip LIKE ?)))';
+    $dayStatsParams = array_merge($seedUserIds, ['203.0.113.%', '198.51.100.%', '192.0.2.%']);
+    $dayStatsTypes = str_repeat('s', count($seedUserIds) + 3);
+}
+
+$dayStats = $db->fetchOne($dayStatsSql, $dayStatsParams, $dayStatsTypes);
 
 // CAP512 Unit 4: Strings — build query string helper
 function build_query(array $params): string {
@@ -183,6 +208,19 @@ $totalPages = max(1, (int)ceil($total / $perPage));
             </div>
 
             <!-- Summary Cards — CAP512 Unit 3: Variables + loops -->
+            <?php if (app_is_demo_mode()): ?>
+            <div class="alert border-0 shadow-sm mb-4" style="background:linear-gradient(135deg,rgba(15,39,64,0.96) 0%, rgba(32,87,112,0.94) 100%); color:#f4f7fb;">
+                <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
+                    <div>
+                        <div class="text-uppercase text-white text-opacity-75 fw-semibold fs-12 mb-1">Demo-safe Audit View</div>
+                        <div class="fw-semibold text-white mb-1">This page stays on the fictional portfolio trail.</div>
+                        <div class="text-white text-opacity-75 small">Only recruiter-safe audit identities and documentation IP ranges are shown here in Demo experience, so the story stays clean without exposing your live records.</div>
+                    </div>
+                    <a href="settings-compliance.php" class="btn btn-light btn-sm"><i class="ri-file-chart-line me-1"></i>Next: Compliance</a>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <div class="row g-3 mb-4">
                 <?php
                 $summaryCards = [
@@ -270,13 +308,14 @@ $totalPages = max(1, (int)ceil($total / $perPage));
                                     <th>Event Type</th>
                                     <th>Details</th>
                                     <th>Country</th>
+                                    <th>Region</th>
                                     <th>Risk Score</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
                             <?php if (empty($entries)): ?>
-                                <tr><td colspan="8" class="text-center text-muted py-5">
+                                <tr><td colspan="9" class="text-center text-muted py-5">
                                     No audit events match your filters. <a href="audit-log.php">Clear filters</a>
                                 </td></tr>
                             <?php else: ?>
@@ -303,6 +342,15 @@ $totalPages = max(1, (int)ceil($total / $perPage));
                                         default                                  => 'completed',
                                     };
                                     $risk = (int)($e['risk_score'] ?? 0);
+                                    $sourceIp = (string)($e['source_ip'] ?? '');
+                                    $displaySourceIp = $sourceIp !== '' ? $sourceIp : '—';
+                                    $countryCode = strtoupper(trim((string)($e['country_code'] ?? '')));
+                                    $displayCountry = ($countryCode === '' || $countryCode === 'XX') ? 'Unknown' : $countryCode;
+                                    $region = (string)($e['region'] ?? '');
+                                    if ($region === '' && is_array($details) && !empty($details['region'])) {
+                                        $region = (string)$details['region'];
+                                    }
+                                    $displayRegion = $region !== '' ? $region : '—';
                                 ?>
                                 <tr>
                                     <td><span class="badge <?= event_badge_class($e['event_code']) ?>"><?= esc($e['event_code']) ?></span></td>
@@ -312,7 +360,7 @@ $totalPages = max(1, (int)ceil($total / $perPage));
                                                 <span class="fs-13"><?= esc($e['email']) ?></span>
                                             <?php else: ?>
                                                 <i class="ri-global-line text-muted"></i>
-                                                <span class="fw-mono fs-12"><?= esc($e['source_ip'] ?? '—') ?></span>
+                                                <span class="fw-mono fs-12"><?= esc($displaySourceIp) ?></span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
@@ -320,9 +368,10 @@ $totalPages = max(1, (int)ceil($total / $perPage));
                                     <td class="fs-13"><?= esc($e['event_name']) ?></td>
                                     <td class="text-muted fs-12"><?= esc($detailStr ?: '—') ?></td>
                                     <td class="text-muted fs-12"><?= esc($e['country_code'] ?? '—') ?></td>
+                                    <td class="text-muted fs-12"><?= esc($displayRegion) ?></td>
                                     <td>
                                         <span class="badge bg-<?= $risk >= 80 ? 'danger' : ($risk >= 40 ? 'warning text-dark' : 'success') ?>-subtle text-<?= $risk >= 80 ? 'danger' : ($risk >= 40 ? 'warning' : 'success') ?>">
-                                            <?= $risk > 0 ? $risk : '—' ?>
+                                            <?= $risk ?>
                                         </span>
                                     </td>
                                     <td><?= status_badge($evStatus) ?></td>

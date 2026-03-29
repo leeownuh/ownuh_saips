@@ -5,6 +5,12 @@ param(
     [string]$DBUser = "root",
     [string]$DBPass = "",
     [string]$AppUrl = "http://localhost/ownuh_saips_fixed",
+    [ValidateSet("demo", "production")]
+    [string]$Profile = "demo",
+    [string]$AppDBUser = "saips_app",
+    [string]$AppDBPass = "",
+    [string]$AuthDBUser = "saips_auth",
+    [string]$AuthDBPass = "",
     [ValidateSet("portfolio", "dev", "test")]
     [string]$Seed = "portfolio",
     [string]$MySQLExe = "",
@@ -20,6 +26,9 @@ function Write-Step([string]$Message) { Write-Host "`n=== $Message ===" -Foregro
 function Write-Info([string]$Message) { Write-Host "  [...] $Message" -ForegroundColor Cyan }
 function Write-OK([string]$Message)   { Write-Host "  [OK]  $Message" -ForegroundColor Green }
 function Fail([string]$Message)       { Write-Host "`n  [ERR] $Message" -ForegroundColor Red; exit 1 }
+function New-RandomHexSecret([int]$Bytes = 24) {
+    -join ((1..$Bytes) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+}
 
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ProjectRoot
@@ -144,6 +153,40 @@ Invoke-MySqlFile -Path (Join-Path $ProjectRoot "database\migrations\003_password
 Invoke-MySqlFile -Path (Get-SeedPath)
 Write-OK "Database import complete using '$Seed' seed"
 
+if ($Profile -eq "production") {
+    Write-Step "Creating least-privilege database users"
+
+    if ([string]::IsNullOrWhiteSpace($AppDBPass)) {
+        $AppDBPass = New-RandomHexSecret
+    }
+    if ([string]::IsNullOrWhiteSpace($AuthDBPass)) {
+        $AuthDBPass = New-RandomHexSecret
+    }
+
+    $safeAppPass  = $AppDBPass.Replace("'", "''")
+    $safeAuthPass = $AuthDBPass.Replace("'", "''")
+
+    & $script:MySqlCli @(New-AuthArgs) -e @"
+CREATE USER IF NOT EXISTS '$AppDBUser'@'127.0.0.1' IDENTIFIED BY '$safeAppPass';
+ALTER USER '$AppDBUser'@'127.0.0.1' IDENTIFIED BY '$safeAppPass';
+CREATE USER IF NOT EXISTS '$AppDBUser'@'localhost' IDENTIFIED BY '$safeAppPass';
+ALTER USER '$AppDBUser'@'localhost' IDENTIFIED BY '$safeAppPass';
+CREATE USER IF NOT EXISTS '$AuthDBUser'@'127.0.0.1' IDENTIFIED BY '$safeAuthPass';
+ALTER USER '$AuthDBUser'@'127.0.0.1' IDENTIFIED BY '$safeAuthPass';
+CREATE USER IF NOT EXISTS '$AuthDBUser'@'localhost' IDENTIFIED BY '$safeAuthPass';
+ALTER USER '$AuthDBUser'@'localhost' IDENTIFIED BY '$safeAuthPass';
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON ownuh_saips.* TO '$AppDBUser'@'127.0.0.1';
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON ownuh_saips.* TO '$AppDBUser'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON ownuh_credentials.* TO '$AuthDBUser'@'127.0.0.1';
+GRANT SELECT, INSERT, UPDATE, DELETE ON ownuh_credentials.* TO '$AuthDBUser'@'localhost';
+FLUSH PRIVILEGES;
+"@
+    if ($LASTEXITCODE -ne 0) {
+        Fail "Failed to create least-privilege users for production profile."
+    }
+    Write-OK "Least-privilege users created for production profile"
+}
+
 Write-Step "Generating JWT keys"
 $KeysDir = Join-Path $ProjectRoot "keys"
 if (-not (Test-Path $KeysDir)) {
@@ -183,18 +226,27 @@ file_put_contents(__DIR__ . '/keys/public.pem', $public);
 if (-not $SkipEnv) {
     Write-Step "Writing backend/config/.env"
     $envPath = Join-Path $ProjectRoot "backend\config\.env"
+    $isTunnelUrl = $AppUrl -match 'ngrok|localhost\.run|trycloudflare|\.tunnel'
+    $envDbUser = if ($Profile -eq "production") { $AppDBUser } else { $DBUser }
+    $envDbPass = if ($Profile -eq "production") { $AppDBPass } else { $DBPass }
+    $envAuthUser = if ($Profile -eq "production") { $AuthDBUser } else { $DBUser }
+    $envAuthPass = if ($Profile -eq "production") { $AuthDBPass } else { $DBPass }
+    $envAppMode = if ($Profile -eq "production") { "production" } else { "development" }
+    $envBcrypt = if ($Profile -eq "production") { 14 } else { 12 }
+    $envTrustedProxy = if ($Profile -eq "production" -and $isTunnelUrl) { "any" } else { "" }
+    $envCookieSameSite = if ($Profile -eq "production" -and $isTunnelUrl) { "Lax" } elseif ($Profile -eq "production") { "Strict" } else { "" }
     @"
 DB_HOST=$DBHost
 DB_PORT=$DBPort
 DB_NAME=ownuh_saips
-DB_USER=$DBUser
-DB_PASS=$DBPass
+DB_USER=$envDbUser
+DB_PASS=$envDbPass
 
 DB_AUTH_HOST=$DBHost
 DB_AUTH_PORT=$DBPort
 DB_AUTH_NAME=ownuh_credentials
-DB_AUTH_USER=$DBUser
-DB_AUTH_PASS=$DBPass
+DB_AUTH_USER=$envAuthUser
+DB_AUTH_PASS=$envAuthPass
 
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
@@ -207,14 +259,14 @@ JWT_ACCESS_TTL=900
 JWT_REFRESH_TTL=604800
 JWT_ADMIN_REFRESH_TTL=28800
 
-APP_ENV=development
+APP_ENV=$envAppMode
 APP_URL=$AppUrl
 APP_TIMEZONE=Asia/Kolkata
 APP_TIMEZONE_LABEL=IST
 
-BCRYPT_COST=12
-TRUSTED_PROXY=
-COOKIE_SAMESITE=
+BCRYPT_COST=$envBcrypt
+TRUSTED_PROXY=$envTrustedProxy
+COOKIE_SAMESITE=$envCookieSameSite
 
 MFA_TOTP_ISSUER=OwnuhSAIPS
 MFA_EMAIL_OTP_TTL=600
@@ -241,6 +293,7 @@ Write-Host "  Setup complete" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Seed mode : $Seed"
+Write-Host "Profile   : $Profile"
 Write-Host "App URL   : $AppUrl"
 Write-Host "Login URL : $AppUrl/login.php"
 Write-Host ""

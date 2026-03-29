@@ -140,26 +140,26 @@ p{line-height:1.65}
 
     public function renderPdf(array $report, array $snapshot, array $meta = []): string
     {
-        $lines = $this->buildPdfLines($report, $snapshot, $meta);
-        $linesPerPage = 46;
-        $pages = array_chunk($lines, $linesPerPage);
+        $pages = $this->buildStyledPdfPages($report, $snapshot, $meta);
+        if ($pages === []) {
+            $pages = [''];
+        }
 
         $objects = [];
         $objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
-        $objects[2] = '<< /Type /Pages /Kids [' . implode(' ', array_map(
-            static fn(int $pageNumber): string => (string)(4 + (($pageNumber - 1) * 2)) . ' 0 R',
-            range(1, count($pages))
-        )) . '] /Count ' . count($pages) . ' >>';
         $objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+        $objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
 
-        $objectId = 4;
-        foreach ($pages as $pageLines) {
-            $content = $this->buildPdfPageStream($pageLines);
+        $kids = [];
+        $objectId = 5;
+        foreach ($pages as $content) {
             $contentId = $objectId + 1;
-            $objects[$objectId] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ' . $contentId . ' 0 R >>';
+            $kids[] = $objectId . ' 0 R';
+            $objects[$objectId] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /ProcSet [/PDF /Text] /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ' . $contentId . ' 0 R >>';
             $objects[$contentId] = '<< /Length ' . strlen($content) . " >>\nstream\n" . $content . "\nendstream";
             $objectId += 2;
         }
+        $objects[2] = '<< /Type /Pages /Kids [' . implode(' ', $kids) . '] /Count ' . count($kids) . ' >>';
 
         ksort($objects);
         $pdf = "%PDF-1.4\n";
@@ -183,112 +183,224 @@ p{line-height:1.65}
         return $pdf;
     }
 
-    private function buildPdfLines(array $report, array $snapshot, array $meta): array
+    private function buildStyledPdfPages(array $report, array $snapshot, array $meta): array
     {
-        $lines = [];
-        $append = function(string $text = '', int $gapAfter = 0) use (&$lines): void {
-            $lines[] = $text;
-            for ($i = 0; $i < $gapAfter; $i++) {
-                $lines[] = '';
+        $pages = [];
+        $stream = '';
+        $pageNo = 0;
+        $y = 0.0;
+        $pageWidth = 595.0;
+        $pageHeight = 842.0;
+        $margin = 36.0;
+        $contentWidth = $pageWidth - ($margin * 2);
+
+        $bg = [244, 247, 251];
+        $navy = [15, 39, 64];
+        $teal = [21, 94, 99];
+        $blue = [47, 95, 156];
+        $slate = [71, 85, 105];
+        $muted = [100, 116, 139];
+        $line = [219, 227, 239];
+        $white = [255, 255, 255];
+        $green = [25, 135, 84];
+        $amber = [217, 119, 6];
+
+        $title = (string)($report['report_title'] ?? 'Executive Security Posture Report');
+        $overall = (string)($report['overall_posture'] ?? 'N/A');
+        $generatedAt = $this->formatPdfTimestamp((string)($meta['generated_at'] ?? date('c')));
+        $provider = strtoupper((string)($meta['provider'] ?? 'report'));
+        $model = (string)($meta['model'] ?? '');
+
+        $finishPage = function () use (&$pages, &$stream, &$pageNo, $margin, $muted): void {
+            if ($stream === '') {
+                return;
+            }
+
+            $stream .= $this->pdfText($margin, 26, 'Ownuh SAIPS Executive Posture Report', 9, $muted, 'F1');
+            $stream .= $this->pdfText(510, 26, 'Page ' . $pageNo, 9, $muted, 'F1');
+            $pages[] = $stream;
+            $stream = '';
+        };
+
+        $startPage = function (bool $firstPage = false) use (
+            &$stream,
+            &$pageNo,
+            &$y,
+            $pageWidth,
+            $pageHeight,
+            $margin,
+            $contentWidth,
+            $bg,
+            $navy,
+            $teal,
+            $blue,
+            $white,
+            $muted,
+            $title,
+            $overall,
+            $generatedAt,
+            $provider,
+            $model
+        ): void {
+            $pageNo++;
+            $stream = $this->pdfRect(0, $pageHeight, $pageWidth, $pageHeight, $bg);
+
+            if ($firstPage) {
+                $stream .= $this->pdfRect($margin, 804, $contentWidth, 112, $navy);
+                $stream .= $this->pdfRect($margin, 804, 180, 10, $teal);
+                $stream .= $this->pdfText($margin + 18, 774, 'BOARD-READY SECURITY BRIEFING', 10, [191, 219, 254], 'F2');
+                $stream .= $this->pdfText($margin + 18, 742, $title, 23, $white, 'F2');
+                $stream .= $this->pdfText($margin + 18, 718, 'Generated ' . $generatedAt . '  |  Provider ' . $provider . ($model !== '' ? '  |  Model ' . $model : ''), 10, [219, 234, 254], 'F1');
+
+                $stream .= $this->pdfRect(414, 782, 145, 52, $this->tint($blue, 0.10));
+                $stream .= $this->pdfText(428, 760, 'OVERALL POSTURE', 9, [191, 219, 254], 'F2');
+                $stream .= $this->pdfText(428, 734, strtoupper($overall), 15, $white, 'F2');
+                $y = 672.0;
+                return;
+            }
+
+            $stream .= $this->pdfRect($margin, 796, $contentWidth, 52, $navy);
+            $stream .= $this->pdfText($margin + 16, 766, $title, 18, $white, 'F2');
+            $stream .= $this->pdfText($margin + 16, 746, 'Posture ' . strtoupper($overall) . '  |  Generated ' . $generatedAt, 10, [219, 234, 254], 'F1');
+            $y = 724.0;
+        };
+
+        $ensureSpace = function (float $needed) use (&$y, $startPage, $finishPage): void {
+            if (($y - $needed) < 68) {
+                $finishPage();
+                $startPage(false);
             }
         };
 
-        $append((string)($report['report_title'] ?? 'Executive Security Posture Report'), 1);
-        $append('Overall posture: ' . (string)($report['overall_posture'] ?? 'N/A'));
-        $append('Generated: ' . (string)($meta['generated_at'] ?? date('c')));
-        if (!empty($meta['provider'])) {
-            $append('Provider: ' . (string)$meta['provider']);
-        }
-        if (!empty($meta['model'])) {
-            $append('Model: ' . (string)$meta['model']);
-        }
-        $append('', 0);
-
-        $append('Executive Summary', 0);
-        foreach ($this->wrapText((string)($report['executive_summary'] ?? ''), 90) as $line) {
-            $append($line);
-        }
-        $append('', 0);
-
-        $append('Key Metrics', 0);
-        foreach (($report['key_metrics'] ?? []) as $metric) {
-            $append('- ' . (string)($metric['label'] ?? 'Metric') . ': ' . (string)($metric['value'] ?? ''));
-        }
-        $append('', 0);
-
-        $append('Board Takeaways', 0);
-        foreach (($report['board_takeaways'] ?? []) as $item) {
-            foreach ($this->wrapText('- ' . (string)$item, 90) as $line) {
-                $append($line);
-            }
-        }
-        $append('', 0);
-
-        $append('Strengths', 0);
-        foreach (($report['strengths'] ?? []) as $item) {
-            foreach ($this->wrapText('- ' . (string)$item, 90) as $line) {
-                $append($line);
-            }
-        }
-        $append('', 0);
-
-        $append('Priority Risks', 0);
-        foreach (($report['priority_risks'] ?? []) as $risk) {
-            $append('* ' . (string)($risk['title'] ?? 'Risk') . ' [' . (string)($risk['priority'] ?? 'medium') . ']');
-            foreach ($this->wrapText('Impact: ' . (string)($risk['impact'] ?? ''), 88) as $line) {
-                $append($line);
-            }
-            foreach ($this->wrapText('Recommendation: ' . (string)($risk['recommendation'] ?? ''), 88) as $line) {
-                $append($line);
-            }
-            $append('', 0);
-        }
-
-        $append('Next 30 Days', 0);
-        foreach (($report['next_30_days'] ?? []) as $item) {
-            foreach ($this->wrapText('- ' . (string)$item, 90) as $line) {
-                $append($line);
-            }
-        }
-        $append('', 0);
-        $append('Compliance Outlook', 0);
-        foreach ($this->wrapText((string)($report['compliance_outlook'] ?? ''), 90) as $line) {
-            $append($line);
-        }
-        $append('', 0);
-        $append('Snapshot Highlights', 0);
-        $append('Security score: ' . (string)($snapshot['security_score'] ?? '0'));
-        $append('Compliance score: ' . (string)($snapshot['compliance_score'] ?? '0') . '%');
-        $append('MFA coverage: ' . (string)($snapshot['users']['mfa_coverage'] ?? '0') . '%');
-        $append('Open incidents: ' . (string)($snapshot['incidents']['open_total'] ?? '0'));
-
-        return $lines;
-    }
-
-    private function buildPdfPageStream(array $lines): string
-    {
-        $y = 792;
-        $stream = "BT\n/F1 12 Tf\n50 " . $y . " Td\n";
-
-        foreach ($lines as $index => $line) {
-            $fontSize = $index === 0 ? 18 : 11;
-            $leading = $index === 0 ? 24 : 15;
-            if ($index === 0) {
-                $stream .= "/F1 " . $fontSize . " Tf\n";
-                $stream .= "(" . $this->pdfEscape($line) . ") Tj\n";
-            } else {
-                $stream .= "0 -" . $leading . " Td\n";
-                if ($line === '') {
-                    $stream .= "() Tj\n";
-                } else {
-                    $stream .= "/F1 " . $fontSize . " Tf\n";
-                    $stream .= "(" . $this->pdfEscape($line) . ") Tj\n";
+        $sectionLines = function (array $items, int $wrap = 78): array {
+            $lines = [];
+            foreach ($items as $item) {
+                foreach ($this->wrapText('- ' . trim((string)$item), $wrap) as $line) {
+                    $lines[] = $line;
                 }
             }
-        }
+            return $lines === [] ? ['No items available.'] : $lines;
+        };
 
-        $stream .= "\nET";
-        return $stream;
+        $paragraphLines = function (string $text, int $wrap = 82): array {
+            $lines = $this->wrapText($text, $wrap);
+            return $lines === [''] ? ['No narrative available.'] : $lines;
+        };
+
+        $drawMetricCard = function (float $x, float $top, float $width, string $label, string $value, array $accent) use (&$stream, $white, $line): void {
+            $stream .= $this->pdfRect($x, $top, $width, 84, $white, $line);
+            $stream .= $this->pdfRect($x, $top, $width, 8, $accent);
+            $stream .= $this->pdfText($x + 14, $top - 30, strtoupper($label), 8.5, [100, 116, 139], 'F2');
+            $stream .= $this->pdfText($x + 14, $top - 58, $value, 20, $accent, 'F2');
+        };
+
+        $drawCard = function (string $heading, array $lines, array $accent) use (&$stream, &$y, $margin, $contentWidth, $white, $line, $ensureSpace): void {
+            $leading = 14.0;
+            $headerHeight = 32.0;
+            $bodyHeight = max(30.0, count($lines) * $leading);
+            $height = $headerHeight + $bodyHeight + 28.0;
+            $ensureSpace($height + 12.0);
+
+            $stream .= $this->pdfRect($margin, $y, $contentWidth, $height, $white, $line);
+            $stream .= $this->pdfRect($margin, $y, $contentWidth, $headerHeight, $this->tint($accent, 0.86));
+            $stream .= $this->pdfRect($margin, $y, 10, $headerHeight, $accent);
+            $stream .= $this->pdfText($margin + 18, $y - 21, $heading, 13, [31, 41, 55], 'F2');
+
+            $textY = $y - 48;
+            foreach ($lines as $lineText) {
+                $stream .= $this->pdfText($margin + 18, $textY, $lineText, 10.5, [55, 65, 81], 'F1');
+                $textY -= $leading;
+            }
+
+            $y -= $height + 12.0;
+        };
+
+        $drawRiskCards = function (array $risks) use (&$stream, &$y, $margin, $contentWidth, $white, $line, $ensureSpace, $amber, $teal, $paragraphLines): void {
+            $ensureSpace(40.0);
+            $stream .= $this->pdfText($margin, $y - 4, 'Priority Risks', 15, [31, 41, 55], 'F2');
+            $stream .= $this->pdfRect($margin, $y - 14, 120, 4, $amber);
+            $y -= 24.0;
+
+            if ($risks === []) {
+                $drawRiskLines = ['No priority risks were identified in this reporting window.'];
+                $height = 74.0;
+                $ensureSpace($height + 12.0);
+                $stream .= $this->pdfRect($margin, $y, $contentWidth, $height, $white, $line);
+                $stream .= $this->pdfText($margin + 18, $y - 30, $drawRiskLines[0], 10.5, [55, 65, 81], 'F1');
+                $y -= $height + 12.0;
+                return;
+            }
+
+            foreach ($risks as $risk) {
+                $priority = strtolower((string)($risk['priority'] ?? 'medium'));
+                $accent = match ($priority) {
+                    'critical', 'high', 'sev1', 'sev2' => [185, 28, 28],
+                    'low', 'sev4' => $teal,
+                    default => $amber,
+                };
+                $title = (string)($risk['title'] ?? 'Risk');
+                $impactLines = $paragraphLines('Impact: ' . (string)($risk['impact'] ?? 'Not provided.'), 76);
+                $recommendationLines = $paragraphLines('Recommendation: ' . (string)($risk['recommendation'] ?? 'Not provided.'), 76);
+                $height = 60.0 + (count($impactLines) * 13.0) + (count($recommendationLines) * 13.0);
+
+                $ensureSpace($height + 12.0);
+                $stream .= $this->pdfRect($margin, $y, $contentWidth, $height, $white, $line);
+                $stream .= $this->pdfRect($margin, $y, 12, $height, $accent);
+                $stream .= $this->pdfText($margin + 22, $y - 26, $title, 12.5, [31, 41, 55], 'F2');
+                $pillWidth = 86.0;
+                $stream .= $this->pdfRect($margin + $contentWidth - ($pillWidth + 18), $y - 16, $pillWidth, 22, $this->tint($accent, 0.78));
+                $stream .= $this->pdfText($margin + $contentWidth - ($pillWidth + 8), $y - 31, strtoupper($priority), 8.5, $accent, 'F2');
+
+                $textY = $y - 50.0;
+                foreach ($impactLines as $lineText) {
+                    $stream .= $this->pdfText($margin + 22, $textY, $lineText, 10.2, [55, 65, 81], 'F1');
+                    $textY -= 13.0;
+                }
+                $textY -= 4.0;
+                foreach ($recommendationLines as $lineText) {
+                    $stream .= $this->pdfText($margin + 22, $textY, $lineText, 10.2, [55, 65, 81], 'F1');
+                    $textY -= 13.0;
+                }
+
+                $y -= $height + 12.0;
+            }
+        };
+
+        $startPage(true);
+
+        $metricTop = $y;
+        $metricGap = 12.0;
+        $metricWidth = ($contentWidth - ($metricGap * 3)) / 4;
+        $metricCards = [
+            ['label' => 'Security Score', 'value' => (string)($snapshot['security_score'] ?? '0'), 'accent' => $blue],
+            ['label' => 'Compliance', 'value' => (string)($snapshot['compliance_score'] ?? '0') . '%', 'accent' => $teal],
+            ['label' => 'MFA Coverage', 'value' => (string)($snapshot['users']['mfa_coverage'] ?? '0') . '%', 'accent' => $green],
+            ['label' => 'Open Incidents', 'value' => (string)($snapshot['incidents']['open_total'] ?? '0'), 'accent' => $amber],
+        ];
+        foreach ($metricCards as $index => $metric) {
+            $x = $margin + ($index * ($metricWidth + $metricGap));
+            $drawMetricCard($x, $metricTop, $metricWidth, $metric['label'], $metric['value'], $metric['accent']);
+        }
+        $y -= 102.0;
+
+        $drawCard('Executive Summary', $paragraphLines((string)($report['executive_summary'] ?? '')), $blue);
+        $drawCard('Board Takeaways', $sectionLines($report['board_takeaways'] ?? []), $teal);
+        $drawCard('Strengths', $sectionLines($report['strengths'] ?? []), $green);
+        $drawRiskCards($report['priority_risks'] ?? []);
+        $drawCard('Next 30 Days', $sectionLines($report['next_30_days'] ?? []), $amber);
+        $drawCard('Compliance Outlook', $paragraphLines((string)($report['compliance_outlook'] ?? '')), $navy);
+
+        $snapshotLines = [];
+        foreach (($report['key_metrics'] ?? []) as $metric) {
+            $snapshotLines[] = (string)($metric['label'] ?? 'Metric') . ': ' . (string)($metric['value'] ?? '');
+        }
+        $snapshotLines[] = 'Live security score: ' . (string)($snapshot['security_score'] ?? '0');
+        $snapshotLines[] = 'Active admin coverage: ' . (string)($snapshot['users']['mfa_coverage'] ?? '0') . '% MFA enabled';
+        $snapshotLines[] = 'Open incidents requiring attention: ' . (string)($snapshot['incidents']['open_total'] ?? '0');
+        $drawCard('Leadership Snapshot', $sectionLines($snapshotLines, 82), $blue);
+
+        $finishPage();
+        return $pages;
     }
 
     private function renderListHtml(array $items): string
@@ -346,6 +458,71 @@ p{line-height:1.65}
         $text = str_replace(["\r", "\n", "\t"], ' ', $text);
         $text = preg_replace('/[^\x20-\x7E]/', '-', $text) ?? '';
         return str_replace(['\\', '(', ')'], ['\\\\', '\(', '\)'], $text);
+    }
+
+    private function pdfRect(float $x, float $topY, float $width, float $height, array $fillRgb, ?array $strokeRgb = null, float $lineWidth = 1.0): string
+    {
+        $bottomY = $topY - $height;
+        $command = '';
+
+        if ($strokeRgb !== null) {
+            $command .= sprintf('%.2F w %s RG ', $lineWidth, $this->pdfRgb($strokeRgb));
+        }
+
+        $command .= sprintf(
+            '%s rg %.2F %.2F %.2F %.2F re %s' . "\n",
+            $this->pdfRgb($fillRgb),
+            $x,
+            $bottomY,
+            $width,
+            $height,
+            $strokeRgb !== null ? 'B' : 'f'
+        );
+
+        return $command;
+    }
+
+    private function pdfText(float $x, float $y, string $text, float $size, array $rgb, string $font = 'F1'): string
+    {
+        return sprintf(
+            "BT %s rg /%s %.2F Tf 1 0 0 1 %.2F %.2F Tm (%s) Tj ET\n",
+            $this->pdfRgb($rgb),
+            $font,
+            $size,
+            $x,
+            $y,
+            $this->pdfEscape($text)
+        );
+    }
+
+    private function pdfRgb(array $rgb): string
+    {
+        return sprintf(
+            '%.3F %.3F %.3F',
+            max(0, min(255, (int)($rgb[0] ?? 0))) / 255,
+            max(0, min(255, (int)($rgb[1] ?? 0))) / 255,
+            max(0, min(255, (int)($rgb[2] ?? 0))) / 255
+        );
+    }
+
+    private function tint(array $rgb, float $mix = 0.82): array
+    {
+        $mix = max(0.0, min(1.0, $mix));
+        return [
+            (int)round(($rgb[0] ?? 0) * (1 - $mix) + 255 * $mix),
+            (int)round(($rgb[1] ?? 0) * (1 - $mix) + 255 * $mix),
+            (int)round(($rgb[2] ?? 0) * (1 - $mix) + 255 * $mix),
+        ];
+    }
+
+    private function formatPdfTimestamp(string $value): string
+    {
+        $timestamp = strtotime($value);
+        if ($timestamp === false) {
+            return $value !== '' ? $value : date('Y-m-d H:i');
+        }
+
+        return date('Y-m-d H:i', $timestamp);
     }
 
     private function e(string $value): string
