@@ -88,6 +88,14 @@ If you want the fastest "this looks like a real product" walkthrough, open these
 3. `settings-compliance.php` for AI executive reporting and export
 4. `settings-alert-rules.php` for live notification rules
 
+<p align="center">
+  <img src="saips-screenshots/main-dashboard-dark.png" alt="Ownuh SAIPS dashboard preview" width="100%">
+</p>
+
+<p align="center">
+  <img src="saips-screenshots/compliance-checklist.png" alt="Ownuh SAIPS compliance and executive report preview" width="100%">
+</p>
+
 ### 7. Optional: turn on AI executive reporting
 
 Add these values to `backend/config/.env` if you want the compliance screen to use a live OpenAI-compatible model instead of the built-in fallback summary:

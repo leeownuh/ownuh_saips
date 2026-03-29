@@ -221,6 +221,47 @@ $csrf = csrf_token();
                     <?php endforeach; ?>
                 </div>
 
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
+                        <div class="card h-100 border-0 shadow-sm overflow-hidden">
+                            <div class="card-header border-0 text-white" style="background:linear-gradient(135deg,#0f2740 0%,#155e63 100%);">
+                                <div class="d-flex align-items-center justify-content-between gap-3">
+                                    <div>
+                                        <h6 class="card-title mb-1 fw-semibold text-white">Authentication Events Trend</h6>
+                                        <p class="mb-0 text-white text-opacity-75 fs-12">Monthly movement across successful, failed, and blocked activity.</p>
+                                    </div>
+                                    <span class="badge rounded-pill text-bg-light text-dark">9-Month View</span>
+                                </div>
+                            </div>
+                            <div class="card-body" style="background:linear-gradient(180deg,rgba(21,94,99,0.06) 0%,rgba(255,255,255,0) 100%);">
+                                <div id="saips_auth_chart" style="min-height:320px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100 border-0 shadow-sm overflow-hidden">
+                            <div class="card-header border-0 text-white" style="background:linear-gradient(135deg,#10203a 0%,#2f5f9c 100%);">
+                                <div class="d-flex align-items-center justify-content-between gap-3">
+                                    <div>
+                                        <h6 class="card-title mb-1 fw-semibold text-white">Global Login Origin Reach</h6>
+                                        <p class="mb-0 text-white text-opacity-75 fs-12">Geographic login coverage over the last 30 days.</p>
+                                    </div>
+                                    <span class="badge rounded-pill text-bg-light text-dark">Live Map</span>
+                                </div>
+                            </div>
+                            <div class="card-body" style="background:linear-gradient(180deg,rgba(47,95,156,0.07) 0%,rgba(255,255,255,0) 100%);">
+                                <style>
+#global-reach-map .jvm-region.jvm-element { fill: #dee2e8; }
+#global-reach-map .jvm-region.jvm-element[data-colored] { fill: #19c37d !important; }
+#global-reach-map { border-radius: 16px; background: radial-gradient(circle at top left, rgba(25,195,125,0.12), rgba(20,36,66,0.03) 45%, rgba(255,255,255,0.8) 100%); }
+</style>
+<div id="global-reach-map" class="jvm-container" style="height:320px;min-height:320px;width:100%;"></div>
+                                <script>window.SAIPS_MAP_DATA = <?= $mapData ?>;</script>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ── Audit Log + User Management ──────────────────────────── -->
                 <div class="row g-4 mb-4">
 
@@ -372,33 +413,6 @@ $csrf = csrf_token();
                 </div>
 
                 <!-- ── Chart + Map ────────────────────────────────────────────── -->
-                <div class="row g-4 mb-4">
-                    <div class="col-md-6">
-                        <div class="card h-100">
-                            <div class="card-header">
-                                <h6 class="card-title mb-0 fw-semibold">Authentication Events Trend (Monthly)</h6>
-                            </div>
-                            <div class="card-body">
-                                <div id="saips_auth_chart" style="min-height:320px;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card h-100">
-                            
-                            <div class="card-body">
-                                <style>
-#global-reach-map .jvm-region.jvm-element { fill: #dee2e8; }
-#global-reach-map .jvm-region.jvm-element[data-colored] { fill: rgb(33 240 54) !important; }
-</style>
-<div id="global-reach-map" class="jvm-container" style="height:320px;min-height:320px;width:100%;"></div>
-                                <!-- CAP512 Unit 5: json_encode of PHP array for JS -->
-                                <script>window.SAIPS_MAP_DATA = <?= $mapData ?>;</script>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
             </div>
         </div>
     </main>
@@ -609,15 +623,47 @@ $csrf = csrf_token();
                     { name: 'Failed Attempts',   data: <?= $chartFailed   ?> },
                     { name: 'Blocked IPs',        data: <?= $chartBlocked  ?> },
                 ],
-                chart:  { type: 'bar', height: 300, toolbar: { show: false } },
-                plotOptions: { bar: { horizontal: false, columnWidth: '55%', borderRadius: 4 } },
+                chart:  {
+                    type: 'bar',
+                    height: 300,
+                    toolbar: { show: false },
+                    foreColor: '#5b6b79',
+                    fontFamily: 'inherit'
+                },
+                plotOptions: { bar: { horizontal: false, columnWidth: '58%', borderRadius: 6, borderRadiusApplication: 'end' } },
                 dataLabels: { enabled: false },
                 stroke: { show: true, width: 2, colors: ['transparent'] },
-                xaxis:  { categories: <?= $chartLabels ?> },
-                yaxis:  { title: { text: 'Events' } },
-                colors: ['#9c2fba', '#77ef36', '#f41111'],
-                fill:   { opacity: 1 },
-                legend: { position: 'bottom' },
+                xaxis:  {
+                    categories: <?= $chartLabels ?>,
+                    axisBorder: { show: false },
+                    axisTicks: { show: false },
+                    labels: { style: { fontWeight: 600 } }
+                },
+                yaxis:  {
+                    title: { text: 'Events' },
+                    labels: { style: { colors: ['#6b7c8f'] } }
+                },
+                grid: {
+                    borderColor: 'rgba(58, 86, 116, 0.12)',
+                    strokeDashArray: 4
+                },
+                colors: ['#19c37d', '#f59e0b', '#ef4444'],
+                fill:   {
+                    opacity: 1,
+                    type: 'gradient',
+                    gradient: {
+                        shade: 'light',
+                        type: 'vertical',
+                        opacityFrom: 0.95,
+                        opacityTo: 0.72,
+                        stops: [0, 100]
+                    }
+                },
+                legend: {
+                    position: 'bottom',
+                    fontWeight: 600,
+                    markers: { radius: 12 }
+                },
                 tooltip: { y: { formatter: v => v + ' events' } },
             }).render();
         }
@@ -641,7 +687,7 @@ $csrf = csrf_token();
                 // Build gradient colours: light blue → dark blue based on login count
                 const vals = Object.values(origins).map(Number);
                 const maxV = vals.length ? Math.max(...vals) : 1;
-                const mapFill = 'rgb(33 240 54)';
+                const mapFill = '#19c37d';
 
                 const mapInstance = new jsVectorMap({
                     map:    'world',

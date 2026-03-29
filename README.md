@@ -63,6 +63,42 @@ It now also includes executive-facing AI reporting, downloadable posture exports
   <img src="docs/media/saips-flow.svg" alt="Ownuh SAIPS product flow diagram" width="100%">
 </p>
 
+---
+
+## Screenshots
+
+### Main Dashboard
+
+<p align="center">
+  <img src="saips-screenshots/main-dashboard-dark.png" alt="Ownuh SAIPS main dashboard in dark mode" width="100%">
+</p>
+
+The main dashboard is designed to feel like an actual operator workspace. The first screen brings KPIs, authentication trends, geographic login reach, and live security workflow signals together before you ever drill into a table.
+
+### Dashboard In Light Mode
+
+<p align="center">
+  <img src="saips-screenshots/main-dashboard-light.png" alt="Ownuh SAIPS main dashboard in light mode" width="100%">
+</p>
+
+The light theme keeps the same structure and pacing for demos where brighter screenshots read better in portfolios, reports, or presentations.
+
+### Executive Reporting And Compliance
+
+<p align="center">
+  <img src="saips-screenshots/compliance-checklist.png" alt="Ownuh SAIPS compliance checklist and AI executive report screen" width="100%">
+</p>
+
+This is where the platform broadens from operator tooling into leadership-ready output: live compliance posture, AI executive reporting, export controls, delivery settings, and report history all sit in one place.
+
+### Sign-In Experience
+
+<p align="center">
+  <img src="saips-screenshots/login-page.png" alt="Ownuh SAIPS login page" width="100%">
+</p>
+
+The sign-in screen sets the tone early. It is still security-first, but the product presentation is deliberate enough that the app feels cohesive before the user even enters the dashboard.
+
 ## Quick Start
 
 ### 1. Install
