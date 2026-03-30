@@ -602,7 +602,7 @@ $refreshHash  = hash('sha256', $refreshToken);
                                     <?php if (app_is_demo_mode()): ?>
                                     <div class="mb-3">
                                         <span class="badge bg-warning-subtle text-warning border border-warning px-3 py-2 fs-12">
-                                            <i class="ri-presentation-line me-1"></i>Recruiter Demo Mode
+                                            <i class="ri-presentation-line me-1"></i>Read-Only Demo Mode
                                         </span>
                                     </div>
                                     <?php endif; ?>

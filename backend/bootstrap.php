@@ -23,6 +23,7 @@ function load_env(string $path): void {
     }
 }
 load_env(__DIR__ . '/config/.env');
+require_once __DIR__ . '/Services/EmailService.php';
 
 function app_env(): string {
     return strtolower(trim((string)($_ENV['APP_ENV'] ?? 'production')));

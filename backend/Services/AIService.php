@@ -35,11 +35,13 @@ final class AIService
 
         try {
             $response = $this->requestExecutiveReport($snapshot);
-            $report = $this->extractStructuredReport($response);
+            $report = $this->isGroq()
+                ? $this->extractChatReport($response)
+                : $this->extractStructuredReport($response);
 
             return [
                 'success' => true,
-                'provider' => 'openai',
+                'provider' => $this->isGroq() ? 'groq' : 'openai',
                 'model' => $this->model,
                 'report' => $report,
                 'warning' => null,
@@ -67,37 +69,68 @@ final class AIService
             throw new \RuntimeException('cURL is not available.');
         }
 
-        $payload = [
-            'model' => $this->model,
-            'input' => [
-                [
-                    'role' => 'developer',
-                    'content' => implode("\n", [
-                        'You are a security strategy analyst writing for executives and board stakeholders.',
-                        'Use the provided posture snapshot only.',
-                        'Be concise, plain-English, and decision-oriented.',
-                        'Do not invent metrics or incidents.',
-                        'Call out both strengths and risks.',
-                        'Recommendations must be specific and feasible within 30 days.',
-                    ]),
+        $isGroq = $this->isGroq();
+        if ($isGroq) {
+            $schemaJson = json_encode($this->reportSchema(), JSON_UNESCAPED_SLASHES);
+            $payload = [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => implode("\n", [
+                            'You are a security strategy analyst writing for executives and board stakeholders.',
+                            'Use the provided posture snapshot only.',
+                            'Be concise, plain-English, and decision-oriented.',
+                            'Do not invent metrics or incidents.',
+                            'Call out both strengths and risks.',
+                            'Recommendations must be specific and feasible within 30 days.',
+                            'Return ONLY valid JSON that matches this schema:',
+                            $schemaJson,
+                        ]),
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => 'Generate an executive report for this organisation posture snapshot: ' . json_encode($snapshot, JSON_UNESCAPED_SLASHES),
+                    ],
                 ],
-                [
-                    'role' => 'user',
-                    'content' => 'Generate an executive report for this organisation posture snapshot: ' . json_encode($snapshot, JSON_UNESCAPED_SLASHES),
+                'temperature' => 0.2,
+                'max_tokens' => 1400,
+            ];
+            $endpoint = '/chat/completions';
+        } else {
+            $payload = [
+                'model' => $this->model,
+                'input' => [
+                    [
+                        'role' => 'developer',
+                        'content' => implode("\n", [
+                            'You are a security strategy analyst writing for executives and board stakeholders.',
+                            'Use the provided posture snapshot only.',
+                            'Be concise, plain-English, and decision-oriented.',
+                            'Do not invent metrics or incidents.',
+                            'Call out both strengths and risks.',
+                            'Recommendations must be specific and feasible within 30 days.',
+                        ]),
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => 'Generate an executive report for this organisation posture snapshot: ' . json_encode($snapshot, JSON_UNESCAPED_SLASHES),
+                    ],
                 ],
-            ],
-            'text' => [
-                'format' => [
-                    'type' => 'json_schema',
-                    'name' => 'executive_posture_report',
-                    'strict' => true,
-                    'schema' => $this->reportSchema(),
+                'text' => [
+                    'format' => [
+                        'type' => 'json_schema',
+                        'name' => 'executive_posture_report',
+                        'strict' => true,
+                        'schema' => $this->reportSchema(),
+                    ],
                 ],
-            ],
-            'max_output_tokens' => 1400,
-        ];
+                'max_output_tokens' => 1400,
+            ];
+            $endpoint = '/responses';
+        }
 
-        $ch = curl_init($this->baseUrl . '/responses');
+        $ch = curl_init($this->baseUrl . $endpoint);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
@@ -131,6 +164,21 @@ final class AIService
         return $decoded;
     }
 
+    private function extractChatReport(array $response): array
+    {
+        $text = $response['choices'][0]['message']['content'] ?? null;
+        if (!is_string($text) || trim($text) === '') {
+            throw new \RuntimeException('Chat completion payload was empty.');
+        }
+
+        $report = json_decode($text, true);
+        if (!is_array($report)) {
+            throw new \RuntimeException('Chat completion payload was not valid JSON.');
+        }
+
+        return $report;
+    }
+
     private function extractStructuredReport(array $response): array
     {
         $text = null;
@@ -158,6 +206,11 @@ final class AIService
         }
 
         return $report;
+    }
+
+    private function isGroq(): bool
+    {
+        return stripos($this->baseUrl, 'groq.com') !== false;
     }
 
     private function buildFallbackReport(array $snapshot): array

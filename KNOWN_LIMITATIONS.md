@@ -2,31 +2,33 @@
 
 ## Portfolio positioning
 
-This repository is curated as a portfolio project and recruiter demo environment.
+This repository is intentionally tuned as a portfolio-grade, read-only demo environment.
+The defaults are optimized for fast local spin-up and a confident walkthrough, not for
+full production hardening.
 
-That means the setup defaults favor:
+What that means in practice:
 
-- fast local installation
-- strong visual/admin walkthroughs
-- realistic fictional operational data
-
-over full production hardening.
+- rapid local installation and repeatable demos
+- strong visual/admin narrative flow
+- realistic fictional operational data that looks alive
 
 ## Current limitations
 
 ### 1. Demo seed vs live-security guarantees
 
-The default setup imports `database/portfolio_seed.sql`, which is designed for presentation quality. Some seeded MFA-related records exist to improve admin views and dashboards, not to model every hardware-backed enrollment path end to end.
+The default setup imports `database/portfolio_seed.sql`, which is crafted for presentation quality.
+Some seeded MFA records exist to support admin views and dashboards, not to fully emulate
+hardware-backed enrollments end to end.
 
-The recruiter-facing Demo lane also prioritizes safe storytelling over perfect operational parity:
+The guest-facing demo lane prioritizes safe storytelling over strict operational parity:
 
 - some values are intentionally masked or tokenised
 - some admin controls are intentionally read-only
-- the goal is to protect the working environment while still showing the product honestly
+- the goal is to protect the environment while still showing the product honestly
 
 ### 2. Redis is optional in local setup
 
-Core flows work without Redis in some local scenarios, but certain features are stronger when Redis is present:
+Core flows can run without Redis locally, but these areas are stronger with Redis enabled:
 
 - rate limiting
 - async queue behavior
@@ -35,11 +37,13 @@ Core flows work without Redis in some local scenarios, but certain features are 
 
 ### 3. Test coverage is lightweight
 
-The repository includes lightweight repo-guard checks, but it does not yet ship with a full PHPUnit/integration suite for all auth and IPS flows.
+The repo includes lightweight guard checks, but it does not yet ship with a full PHPUnit/integration
+suite across all auth, IPS, and reporting flows.
 
 ### 4. Local setup is prioritized
 
-The Windows and Linux setup scripts are optimized for local demo environments first. Production deployment still requires a tighter operational pass on:
+The Windows and Linux setup scripts are tuned for local demos first. Production deployment still
+requires a tighter operational pass on:
 
 - secrets management
 - HTTPS termination
@@ -48,6 +52,9 @@ The Windows and Linux setup scripts are optimized for local demo environments fi
 - queue workers
 - monitoring and alert routing
 
-### 5. Some legacy drift was recently normalized
+### 5. Recent iteration and consolidation
 
-The repository has gone through active iteration, including older reset/setup paths. The current setup and password-reset flow are now aligned around canonical scripts and the `password_resets` table, but the project should still be treated as an actively refined portfolio artifact.
+The repository has gone through active iteration, including older reset/setup paths. The current
+setup and password-reset flow are now aligned around the canonical scripts and the
+`password_resets` table, but the project should still be treated as an actively refined
+portfolio artifact.

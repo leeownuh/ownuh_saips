@@ -87,7 +87,7 @@ $themeCssVersion = file_exists($themeCssPath) ? (string)filemtime($themeCssPath)
 
                     <?php if (function_exists('app_is_demo_mode') && app_is_demo_mode()): ?>
                     <span class="badge bg-warning-subtle text-warning border border-warning d-none d-md-inline-flex align-items-center">
-                        <i class="ri-presentation-line me-1"></i>Recruiter Demo
+                        <i class="ri-presentation-line me-1"></i>Read-Only Demo
                     </span>
                     <?php endif; ?>
                 </div>
