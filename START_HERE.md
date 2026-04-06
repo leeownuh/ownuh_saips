@@ -114,7 +114,7 @@ Important:
 - Live LLM output depends on external provider access, quota, and structured-output reliability, so demos can be run with local explanations only.
 - There is currently no `verify_installation.py`, `MASTERS_PROPOSAL.md`, or other long-form proposal pack in this repo.
 
-## Best files to show a supervisor
+## Best files 
 
 - `attack-attribution.php`
 - `backend/attribution_visuals.php`
