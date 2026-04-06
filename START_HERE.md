@@ -43,6 +43,8 @@ This repository now includes a complete, defensible AI/ML security-analysis lane
   Honest limitations and next-step research gaps.
 - `backend/ml_service/README.md`
   Quick-start guide for the ML reproducibility folder.
+- `ML_RESEARCH.md`
+  Research-facing framing: problem statement, method, baselines, claims, and next-step agenda.
 
 ## Research storyline
 
@@ -110,7 +112,7 @@ Important:
 - The dashboard can use real app data if your SAIPS database contains audit, incident, and blocked-IP records.
 - The LLM enhancement is optional and explanatory; the core detection logic still works without it.
 - Live LLM output depends on external provider access, quota, and structured-output reliability, so demos can be run with local explanations only.
-- There is currently no `verify_installation.py`, `ML_RESEARCH.md`, `MASTERS_PROPOSAL.md`, or other long-form proposal pack in this repo.
+- There is currently no `verify_installation.py`, `MASTERS_PROPOSAL.md`, or other long-form proposal pack in this repo.
 
 ## Best files to show a supervisor
 
@@ -122,5 +124,6 @@ Important:
 - `backend/ml_service/README.md`
 - `backend/ml_service/DATASET.md`
 - `backend/ml_service/LIMITATIONS.md`
+- `ML_RESEARCH.md`
 
 Those show the system design, the detection path, the explainability layer, and the honesty around evaluation limits.

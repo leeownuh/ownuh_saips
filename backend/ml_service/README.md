@@ -12,6 +12,7 @@ This folder contains the security-analytics models plus a small, reproducible be
 - `benchmark_pipeline.py`: Shared evaluation helpers.
 - `DATASET.md`: Documents how the benchmark data is generated.
 - `LIMITATIONS.md`: Records the current research and engineering limits honestly.
+- `../../ML_RESEARCH.md`: Research-facing framing for supervisor outreach and paper positioning.
 
 ## Quick start
 
