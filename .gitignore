@@ -1,15 +1,15 @@
-# ── Secrets — NEVER commit these ─────────────────────────────
+# Secrets
 backend/config/.env
 keys/private.pem
 keys/public.pem
 keys/htdocs.lnk
 
-# ── Logs ─────────────────────────────────────────────────────
+# Logs
 *.log
 logs/*.log
 /var/log/
 
-# ── Debug / temp files ───────────────────────────────────────
+# Debug / temp files
 debug.php
 debug_*.php
 summarized_conversations/
@@ -18,15 +18,19 @@ summarized_conversations/
 backend/data/*.mmdb
 composer.phar
 composer-setup.php
+__pycache__/
+*.pyc
+backend/ml_service/models/
+backend/ml_service/ml_*.tmp
 
-# ── OS / IDE ─────────────────────────────────────────────────
+# OS / IDE
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
 
-# ── PHP vendor is committed for portability (no composer needed on server) ──
-# vendor/   ← intentionally kept
+# PHP vendor is committed for portability
+# vendor/
 
-# ── Compiled assets kept as-is ───────────────────────────────
-# assets/   ← intentionally kept
+# Compiled assets kept as-is
+# assets/

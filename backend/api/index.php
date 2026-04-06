@@ -55,6 +55,12 @@ $routes = [
     '#^/ips/geo-rules(/.*)?$#'          => __DIR__ . '/ips/geo-rules.php',
     '#^/ips/rate-limits(/.*)?$#'        => __DIR__ . '/ips/rate-config.php',
 
+    // ML
+    '#^/ml/anomalies$#'                 => __DIR__ . '/ml_anomalies.php',
+    '#^/ml/attacks$#'                   => __DIR__ . '/ml_attacks.php',
+    '#^/ml/entities$#'                  => __DIR__ . '/ml_entities.php',
+    '#^/ml/attribution$#'               => __DIR__ . '/ml_attribution.php',
+
     // Users
     '#^/users(/.*)?$#'                  => __DIR__ . '/users/list.php',
 ];

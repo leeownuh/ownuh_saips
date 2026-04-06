@@ -89,7 +89,7 @@ $reportHistory = $reportManager->getHistory(8);
                 <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <div>
                         <h5 class="card-title mb-1">AI Executive Report</h5>
-                        <p class="text-muted fs-12 mb-0">Generate a leadership-ready summary of organisation posture from live SAIPS metrics.</p>
+                        <p class="text-muted fs-12 mb-0">Generate a leadership-ready summary of organisation posture from live SAIPS metrics, with deterministic fallback if external AI access is unavailable.</p>
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                     <form method="POST" class="d-flex align-items-center gap-2">
@@ -205,7 +205,7 @@ $reportHistory = $reportManager->getHistory(8);
                         </div>
                     <?php else: ?>
                         <div class="text-muted fs-13">
-                            This report uses live compliance, incident, IPS, audit, and authentication posture to produce a board-style summary. If <code>OPENAI_API_KEY</code> is not configured, the app falls back to a deterministic local summary so the workflow still works.
+                            This report uses live compliance, incident, IPS, audit, and authentication posture to produce a board-style summary. If an OpenAI-compatible provider is not configured, unavailable, or out of quota, the app falls back to a deterministic local summary so the workflow still works.
                         </div>
                     <?php endif; ?>
                 </div>

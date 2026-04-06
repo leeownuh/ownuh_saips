@@ -10,7 +10,7 @@
 
 <p align="center">
   <strong>Security operations product thinking, built in PHP.</strong><br>
-  AI executive reporting, live alert dispatch, executive email delivery, and demo-ready auth + IPS workflows.
+  AI-assisted executive reporting with deterministic fallback, live alert dispatch, executive email delivery, and demo-ready auth + IPS workflows.
 </p>
 
 <p align="center">
@@ -42,20 +42,11 @@ Ownuh SAIPS is a full-stack security administration platform built with PHP, MyS
 
 This is not just a login screen with a dashboard bolted on. It is designed to feel like a compact security operations product: analysts get incident and IPS visibility, admins get strong auth controls, and leadership gets executive-ready posture reporting without needing to read raw logs.
 
-It now also includes executive-facing AI reporting, downloadable posture exports, scheduled leadership updates, real alert-driven email notifications, and a cleaner shared-layout UI layer across the PHP application.
+It now also includes executive-facing AI reporting with deterministic fallback, downloadable posture exports, scheduled leadership updates, real alert-driven email notifications, and a cleaner shared-layout UI layer across the PHP application.
 
 The public demo lane is intentionally separated from the core production experience too. Visitors can choose Demo or Production on arrival, demo identities are masked or tokenised when needed, and risky operator actions stay read-only so the showcase tells the product story without exposing your live working data.
 
 **Compliance targets:** NIST SP 800-63B, OWASP Top 10, ISO/IEC 27001, GDPR Article 33, SOC 2 Type II
-
----
-
-## Why It Lands Well In A Demo
-
-- It shows both defensive depth and product thinking: auth, MFA, lockouts, IPS, audit, incidents, and compliance all connect instead of living as isolated pages
-- It gives leadership-facing output, not just engineer-facing telemetry, through AI executive summaries, exportable reports, and scheduled email briefings
-- It behaves like an opinionated security product: alerts can actually notify, incidents can be tracked, and admin actions leave an audit trail
-- It is practical to run locally with XAMPP, but polished enough to show publicly through ngrok
 
 ---
 
@@ -292,11 +283,13 @@ Once configured, new login events will log Country + Region without hitting exte
 
 ### AI And Executive Reporting
 
-- AI-generated executive posture reporting from live compliance and security metrics
-- OpenAI-compatible AI provider support for executive posture reporting, including Groq via `OPENAI_BASE_URL`
+- AI-generated executive posture reporting from live compliance and security metrics, with deterministic local fallback when external model access is unavailable
+- OpenAI-compatible AI provider support for executive posture reporting and attribution narratives, including Groq via `OPENAI_BASE_URL`
 - Executive report export in browser-friendly HTML and a polished board-style PDF
 - Scheduled weekly executive report emails to active admins and superadmins
 - Stored executive report history with cadence and attachment preferences
+- A graph-based attack-attribution dashboard that visually links users, devices, IPs, and incidents
+- Optional LLM analyst narratives on the attack-attribution screen, without making live model access a requirement for the core pipeline
 
 ### Alerting And Operator Experience
 
@@ -350,6 +343,7 @@ Once configured, new login events will log Country + Region without hitting exte
 - `users.php` - user management and MFA bypass issuance
 - `settings-compliance.php` - compliance posture plus AI executive reporting
 - `executive-report-export.php` - HTML/PDF export endpoint for executive reports
+- `attack-attribution.php` - graph-based attack attribution with relationship-link visuals, local explanations, and optional LLM triage narratives
 - `auth-signup.php` - shared-shell signup flow using the live registration API
 - `auth-401.php`, `auth-404.php`, `auth-500.php`, `under-maintenance.php` - shared-shell utility/error pages
 - `ips-blocked-ips.php` - blocked IP administration
@@ -366,8 +360,8 @@ Once configured, new login events will log Country + Region without hitting exte
 - JWT keys are generated locally and should stay out of git
 - Session cookies adapt correctly for direct localhost vs ngrok/reverse-proxy use
 - Password history and similarity checks are enforced on both reset and change flows
-- AI reporting uses structured outputs and can fall back to a deterministic local executive summary when no OpenAI API key is configured
-- AI reporting can be pointed at OpenAI-compatible providers such as Groq by setting `OPENAI_BASE_URL`
+- AI reporting and attribution narratives use structured outputs and can fall back to deterministic local summaries when no OpenAI-compatible key is configured or the provider is unavailable
+- AI reporting can be pointed at OpenAI-compatible providers such as Groq by setting `OPENAI_BASE_URL`, but live generation still depends on provider quota, billing, and response reliability
 - Executive-report emails render as HTML and can attach the generated report as PDF
 - Alert rules are now live event-to-email notifications for the wired auth, IPS, and incident event codes
 - Historical audit entries are not rewritten by email-domain migrations, preserving tamper-evident hash integrity
