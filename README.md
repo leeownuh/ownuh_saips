@@ -291,8 +291,8 @@ Once configured, new login events will log Country + Region without hitting exte
 - A graph-based attack-attribution dashboard that visually links users, devices, IPs, and incidents
 - Optional LLM analyst narratives on the attack-attribution screen, without making live model access a requirement for the core pipeline
 - In-page analyst feedback labeling on the attack-attribution dashboard (`true_positive`, `false_positive`, `needs_review`) for Level-2 evaluation loops
-- An ML evaluation dashboard that surfaces anomaly baseline comparison, pipeline ablation, adversarial robustness, and case studies from reproducible JSON reports
-- A Level-2 research lane with temporal behavioral features, explanation-quality scoring, and analyst feedback labels that influence evaluation ranking
+- An ML evaluation dashboard that surfaces anomaly baselines, ablations, adversarial robustness, time-window performance, cross-environment generalization, and case-study exports from reproducible JSON reports
+- A Level-2 research lane with temporal behavioral features, temporal graph attribution scoring, explanation-quality scoring, and analyst feedback labels that influence evaluation ranking
 
 ### Alerting And Operator Experience
 

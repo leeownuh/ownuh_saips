@@ -64,21 +64,29 @@ def main() -> None:
     dataset = build_benchmark_dataset()
     anomaly, attack = load_or_train_detectors()
     baseline = evaluate_dataset(dataset["test_cases"], anomaly, attack)
-    scenarios = {
-        "baseline": baseline["modes"]["graph_plus_anomaly"],
-        "ip_rotation": evaluate_dataset(mutate_ip_rotation(dataset["test_cases"]), anomaly, attack)["modes"]["graph_plus_anomaly"],
-        "timing_jitter": evaluate_dataset(mutate_timing_jitter(dataset["test_cases"]), anomaly, attack)["modes"]["graph_plus_anomaly"],
-        "device_spoofing": evaluate_dataset(mutate_device_spoofing(dataset["test_cases"]), anomaly, attack)["modes"]["graph_plus_anomaly"],
-        "mfa_failure_noise": evaluate_dataset(mutate_mfa_failure_noise(dataset["test_cases"]), anomaly, attack)["modes"]["graph_plus_anomaly"],
+    scenarios_by_mode: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    scenario_cases = {
+        "baseline": dataset["test_cases"],
+        "ip_rotation": mutate_ip_rotation(dataset["test_cases"]),
+        "timing_jitter": mutate_timing_jitter(dataset["test_cases"]),
+        "device_spoofing": mutate_device_spoofing(dataset["test_cases"]),
+        "mfa_failure_noise": mutate_mfa_failure_noise(dataset["test_cases"]),
     }
 
-    baseline_recall = scenarios["baseline"]["recall"]
-    for name, metrics in scenarios.items():
-        metrics["recall_delta_vs_baseline"] = round(float(metrics["recall"]) - float(baseline_recall), 4)
+    for mode in ("graph_plus_anomaly", "temporal_graph_plus_anomaly"):
+        mode_scenarios: Dict[str, Dict[str, Any]] = {}
+        for name, cases in scenario_cases.items():
+            result = baseline if name == "baseline" else evaluate_dataset(cases, anomaly, attack)
+            mode_scenarios[name] = result["modes"][mode]
+
+        baseline_recall = mode_scenarios["baseline"]["recall"]
+        for name, metrics in mode_scenarios.items():
+            metrics["recall_delta_vs_baseline"] = round(float(metrics["recall"]) - float(baseline_recall), 4)
+        scenarios_by_mode[mode] = mode_scenarios
 
     report = {
-        "mode": "graph_plus_anomaly",
-        "scenarios": scenarios,
+        "mode": "multi_mode",
+        "scenarios": scenarios_by_mode,
         "feedback": feedback_summary(),
         "dataset": {
             "test_cases": len(dataset["test_cases"]),

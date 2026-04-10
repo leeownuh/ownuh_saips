@@ -1,27 +1,41 @@
 # Benchmark Dataset
 
-The bundled benchmark is a small synthetic dataset designed to exercise the SAIPS attack-attribution workflow in a reproducible way.
+The SAIPS benchmark is a synthetic, reproducible dataset for attribution experiments and dashboard evidence generation.
+
+## Dataset files
+
+Versioned files are stored in:
+
+- `datasets/v1_train_events.json`
+- `datasets/v1_test_cases.json`
+
+Create or refresh these files:
+
+```powershell
+cd backend/ml_service
+py -3.11 export_benchmark_version.py --version v1
+```
+
+`build_benchmark_dataset()` will load versioned files first when present, otherwise generate and save them.
 
 ## Structure
 
-`benchmark_dataset.py` generates:
-
-- `train_events`: benign and suspicious historical events used to train the local anomaly and attack models.
-- `test_cases`: case windows used for evaluation and ablation.
+- `train_events`: historical benign and suspicious events used for model training.
+- `test_cases`: labeled case windows used for evaluation, ablation, adversarial testing, and case-study export.
 
 Each test case includes:
 
 - `case_id`
-- `label`: `1` for malicious, `0` for benign
+- `label` (`1` malicious, `0` benign)
 - `attack_type`
 - `expected_entities`
 - `description`
 - `events`
 
-## Included case patterns
+## Included patterns
 
-- Benign known-device behaviour
-- Benign new-device but verified behaviour
+- Benign known-device behavior
+- Benign new-device verified behavior
 - Account takeover / impossible travel
 - Credential stuffing
 - Distributed pressure on one account
@@ -29,15 +43,13 @@ Each test case includes:
 
 ## Why synthetic
 
-This repository is a portfolio and research prototype, so the benchmark must be:
-
-- Shareable
-- Repeatable
-- Small enough to run locally
-- Free of private or sensitive operational data
+- Shareable in a public portfolio
+- Repeatable for grading and demos
+- Fast enough to run locally
+- Free of sensitive enterprise telemetry
 
 ## What it is not
 
-- It is not a replacement for enterprise-scale telemetry.
-- It is not statistically representative of a production SOC.
-- It is not a claim of external validation.
+- Not a production-scale SOC dataset
+- Not externally validated field telemetry
+- Not sufficient alone for publication-grade claims

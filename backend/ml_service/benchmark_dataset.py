@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timedelta
+import json
+from pathlib import Path
 from typing import Any, Dict, List
+
+
+DATASET_VERSION = "v1"
+DATASET_DIR = Path(__file__).parent / "datasets"
 
 
 def _stamp(base: datetime, minutes: int) -> str:
@@ -47,7 +53,7 @@ def _event(
     }
 
 
-def build_benchmark_dataset() -> Dict[str, Any]:
+def _build_synthetic_benchmark_dataset() -> Dict[str, Any]:
     base = datetime(2026, 4, 1, 9, 0, 0)
     train_events: List[Dict[str, Any]] = []
     next_id = 1
@@ -194,7 +200,64 @@ def build_benchmark_dataset() -> Dict[str, Any]:
         "Legitimate verified device enrolment",
     )
 
-    return {"train_events": train_events, "test_cases": cases}
+    return {
+        "train_events": train_events,
+        "test_cases": cases,
+        "dataset_version": DATASET_VERSION,
+        "dataset_source": "generated",
+    }
+
+
+def _dataset_file(version: str, kind: str) -> Path:
+    return DATASET_DIR / f"{version}_{kind}.json"
+
+
+def load_versioned_dataset(version: str = DATASET_VERSION) -> Dict[str, Any] | None:
+    train_file = _dataset_file(version, "train_events")
+    test_file = _dataset_file(version, "test_cases")
+    if not train_file.exists() or not test_file.exists():
+        return None
+
+    try:
+        train_events = json.loads(train_file.read_text(encoding="utf-8"))
+        test_cases = json.loads(test_file.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return None
+
+    if not isinstance(train_events, list) or not isinstance(test_cases, list):
+        return None
+
+    return {
+        "train_events": train_events,
+        "test_cases": test_cases,
+        "dataset_version": version,
+        "dataset_source": "versioned_file",
+    }
+
+
+def save_versioned_dataset(dataset: Dict[str, Any], version: str = DATASET_VERSION) -> Dict[str, str]:
+    DATASET_DIR.mkdir(exist_ok=True)
+    train_file = _dataset_file(version, "train_events")
+    test_file = _dataset_file(version, "test_cases")
+    train_file.write_text(json.dumps(dataset.get("train_events", []), indent=2), encoding="utf-8")
+    test_file.write_text(json.dumps(dataset.get("test_cases", []), indent=2), encoding="utf-8")
+    return {"train_events": str(train_file), "test_cases": str(test_file)}
+
+
+def build_benchmark_dataset(prefer_versioned: bool = True, version: str = DATASET_VERSION) -> Dict[str, Any]:
+    if prefer_versioned:
+        loaded = load_versioned_dataset(version)
+        if loaded is not None:
+            return loaded
+
+    generated = _build_synthetic_benchmark_dataset()
+    generated["dataset_version"] = version
+
+    if prefer_versioned:
+        save_versioned_dataset(generated, version=version)
+        generated["dataset_source"] = "generated_and_saved"
+
+    return generated
 
 
 def clone_cases(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

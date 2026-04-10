@@ -55,8 +55,19 @@ $modes = $evaluationReport['modes'] ?? [];
 $anomalyModels = $evaluationReport['anomaly_models'] ?? [];
 $attackClassifier = $evaluationReport['attack_classifier'] ?? [];
 $caseStudies = $evaluationReport['case_studies'] ?? [];
-$scenarios = $adversarialReport['scenarios'] ?? [];
+$adversarialScenarios = $adversarialReport['scenarios'] ?? [];
+$firstAdversarial = is_array($adversarialScenarios) ? reset($adversarialScenarios) : null;
+if (is_array($firstAdversarial) && isset($firstAdversarial['precision'])) {
+    $adversarialScenarios = [
+        'graph_plus_anomaly' => $adversarialScenarios,
+    ];
+}
+$timeWindows = $evaluationReport['time_window_evaluation']['windows'] ?? [];
+$crossEnvironment = $evaluationReport['cross_environment_generalization']['environments'] ?? [];
 $explanationQuality = $evaluationReport['explanation_quality'] ?? [];
+$explanationLocal = is_array($explanationQuality['local'] ?? null) ? $explanationQuality['local'] : $explanationQuality;
+$explanationLlm = is_array($explanationQuality['llm'] ?? null) ? $explanationQuality['llm'] : [];
+$explanationDelta = is_array($explanationQuality['delta_over_local'] ?? null) ? $explanationQuality['delta_over_local'] : [];
 $feedbackSummary = $evaluationReport['feedback'] ?? ($adversarialReport['feedback'] ?? []);
 $feedbackRecent = $evaluationReport['feedback_recent'] ?? [];
 
@@ -145,7 +156,7 @@ $generatedSummary = [
             </div>
             <div class="col-6 col-md-3">
                 <div class="card text-center py-3 border-success border-2">
-                    <h3 class="fw-bold text-success mb-0"><?= esc(ml_eval_metric($explanationQuality['overall'] ?? null)) ?></h3>
+                    <h3 class="fw-bold text-success mb-0"><?= esc(ml_eval_metric(($explanationLlm['overall'] ?? ($explanationLocal['overall'] ?? null)))) ?></h3>
                     <p class="text-muted fs-12 mb-0">Explanation Quality</p>
                 </div>
             </div>
@@ -277,36 +288,39 @@ $generatedSummary = [
                         <h6 class="mb-0 fw-semibold">Adversarial Robustness</h6>
                     </div>
                     <div class="card-body">
-                        <?php if ($scenarios === []): ?>
+                        <?php if ($adversarialScenarios === []): ?>
                             <p class="text-muted mb-0">No adversarial-suite report found yet.</p>
                         <?php else: ?>
-                            <div class="table-responsive">
-                                <table class="table table-sm align-middle mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Scenario</th>
-                                            <th>Recall</th>
-                                            <th>F1</th>
-                                            <th>ROC-AUC</th>
-                                            <th>Recall Delta</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($scenarios as $name => $metrics): ?>
-                                            <?php $delta = (float)($metrics['recall_delta_vs_baseline'] ?? 0.0); ?>
+                            <?php foreach ($adversarialScenarios as $modeName => $modeScenarios): ?>
+                                <div class="fw-semibold mb-2"><?= esc(str_replace('_', ' ', (string)$modeName)) ?></div>
+                                <div class="table-responsive mb-3">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
                                             <tr>
-                                                <td><span class="badge bg-light text-dark border"><?= esc((string)$name) ?></span></td>
-                                                <td><?= esc(ml_eval_metric($metrics['recall'] ?? null)) ?></td>
-                                                <td><?= esc(ml_eval_metric($metrics['f1'] ?? null)) ?></td>
-                                                <td><?= esc(ml_eval_metric($metrics['roc_auc'] ?? null)) ?></td>
-                                                <td class="<?= $delta < 0 ? 'text-danger' : 'text-success' ?> fw-semibold">
-                                                    <?= esc(number_format($delta, 4)) ?>
-                                                </td>
+                                                <th>Scenario</th>
+                                                <th>Recall</th>
+                                                <th>F1</th>
+                                                <th>ROC-AUC</th>
+                                                <th>Recall Delta</th>
                                             </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ((array)$modeScenarios as $name => $metrics): ?>
+                                                <?php $delta = (float)($metrics['recall_delta_vs_baseline'] ?? 0.0); ?>
+                                                <tr>
+                                                    <td><span class="badge bg-light text-dark border"><?= esc((string)$name) ?></span></td>
+                                                    <td><?= esc(ml_eval_metric($metrics['recall'] ?? null)) ?></td>
+                                                    <td><?= esc(ml_eval_metric($metrics['f1'] ?? null)) ?></td>
+                                                    <td><?= esc(ml_eval_metric($metrics['roc_auc'] ?? null)) ?></td>
+                                                    <td class="<?= $delta < 0 ? 'text-danger' : 'text-success' ?> fw-semibold">
+                                                        <?= esc(number_format($delta, 4)) ?>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -320,16 +334,17 @@ $generatedSummary = [
                         <h6 class="mb-0 fw-semibold">Explanation Quality</h6>
                     </div>
                     <div class="card-body">
-                        <?php if ($explanationQuality === []): ?>
+                        <?php if ($explanationLocal === []): ?>
                             <p class="text-muted mb-0">No explanation quality metrics found yet.</p>
                         <?php else: ?>
                             <div class="d-flex flex-wrap gap-2 mb-3">
-                                <span class="badge bg-primary-subtle text-primary border border-primary">Overall <?= esc(ml_eval_metric($explanationQuality['overall'] ?? null)) ?></span>
-                                <span class="badge bg-info-subtle text-info border border-info">Attack Alignment <?= esc(ml_eval_metric($explanationQuality['attack_alignment'] ?? null)) ?></span>
-                                <span class="badge bg-success-subtle text-success border border-success">Entity Alignment <?= esc(ml_eval_metric($explanationQuality['entity_alignment'] ?? null)) ?></span>
-                                <span class="badge bg-warning-subtle text-warning border border-warning">Focus Alignment <?= esc(ml_eval_metric($explanationQuality['focus_user_alignment'] ?? null)) ?></span>
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary">Local Overall <?= esc(ml_eval_metric($explanationLocal['overall'] ?? null)) ?></span>
+                                <span class="badge bg-primary-subtle text-primary border border-primary">LLM Overall <?= esc(ml_eval_metric(($explanationLlm['overall'] ?? $explanationLocal['overall'] ?? null))) ?></span>
+                                <span class="badge bg-info-subtle text-info border border-info">Attack Delta <?= esc(ml_eval_metric($explanationDelta['attack_alignment_delta'] ?? 0.0)) ?></span>
+                                <span class="badge bg-success-subtle text-success border border-success">Entity Delta <?= esc(ml_eval_metric($explanationDelta['entity_alignment_delta'] ?? 0.0)) ?></span>
+                                <span class="badge bg-warning-subtle text-warning border border-warning">Focus Delta <?= esc(ml_eval_metric($explanationDelta['focus_alignment_delta'] ?? 0.0)) ?></span>
                             </div>
-                            <p class="small text-muted mb-0">These scores evaluate whether generated narratives reflect predicted attack type, linked entities, and behavioral focus context.</p>
+                            <p class="small text-muted mb-0">These scores compare local deterministic explanations against LLM-assisted narratives across attack/entity/focus alignment.</p>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -376,6 +391,81 @@ $generatedSummary = [
             </div>
         </div>
 
+        <div class="row g-4 mb-4">
+            <div class="col-xl-6">
+                <div class="card card-hover h-100">
+                    <div class="card-header">
+                        <h6 class="mb-0 fw-semibold">Time-Window Evaluation</h6>
+                    </div>
+                    <div class="card-body">
+                        <?php if ($timeWindows === []): ?>
+                            <p class="text-muted mb-0">No time-window evaluation found yet.</p>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Split</th>
+                                            <th>Train/Test Cases</th>
+                                            <th>Temporal F1</th>
+                                            <th>Temporal ROC-AUC</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($timeWindows as $window): ?>
+                                            <?php $temporalMode = $window['modes']['temporal_graph_plus_anomaly'] ?? []; ?>
+                                            <tr>
+                                                <td><?= esc(number_format((float)($window['split_ratio'] ?? 0.0), 2)) ?></td>
+                                                <td><?= esc((string)($window['train_case_count'] ?? 0)) ?>/<?= esc((string)($window['test_case_count'] ?? 0)) ?></td>
+                                                <td><?= esc(ml_eval_metric($temporalMode['f1'] ?? null)) ?></td>
+                                                <td><?= esc(ml_eval_metric($temporalMode['roc_auc'] ?? null)) ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-6">
+                <div class="card card-hover h-100">
+                    <div class="card-header">
+                        <h6 class="mb-0 fw-semibold">Cross-Environment Generalization</h6>
+                    </div>
+                    <div class="card-body">
+                        <?php if ($crossEnvironment === []): ?>
+                            <p class="text-muted mb-0">No cross-environment report found yet.</p>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Environment</th>
+                                            <th>F1</th>
+                                            <th>ROC-AUC</th>
+                                            <th>F1 Delta</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($crossEnvironment as $envName => $metrics): ?>
+                                            <?php $delta = (float)($metrics['f1_delta_vs_baseline'] ?? 0.0); ?>
+                                            <tr>
+                                                <td><span class="badge bg-light text-dark border"><?= esc((string)$envName) ?></span></td>
+                                                <td><?= esc(ml_eval_metric($metrics['f1'] ?? null)) ?></td>
+                                                <td><?= esc(ml_eval_metric($metrics['roc_auc'] ?? null)) ?></td>
+                                                <td class="<?= $delta < 0 ? 'text-danger' : 'text-success' ?> fw-semibold"><?= esc(number_format($delta, 4)) ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card card-hover">
             <div class="card-header">
                 <h6 class="mb-0 fw-semibold">Case Studies (Top Risk)</h6>
@@ -384,6 +474,12 @@ $generatedSummary = [
                 <?php if ($caseStudies === []): ?>
                     <p class="text-muted mb-0">No case studies were generated yet.</p>
                 <?php else: ?>
+                    <?php $caseExport = $evaluationReport['case_study_export'] ?? []; ?>
+                    <?php if (!empty($caseExport) && ($caseExport['status'] ?? '') === 'success'): ?>
+                        <div class="alert alert-light border mb-3">
+                            <div class="small text-muted">Exported <?= esc((string)($caseExport['count'] ?? 0)) ?> case-study markdown files to <code><?= esc((string)($caseExport['output_dir'] ?? 'backend/ml_service/reports/case_studies')) ?></code>.</div>
+                        </div>
+                    <?php endif; ?>
                     <div class="accordion" id="caseStudiesAccordion">
                         <?php foreach ($caseStudies as $idx => $case): ?>
                             <?php $itemId = 'case-study-' . $idx; ?>

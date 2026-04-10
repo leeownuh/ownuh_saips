@@ -33,7 +33,7 @@ Compared with graph-only attribution, a fused pipeline should:
 
 ## Current method
 
-The current system has four main layers.
+The current system has five main layers.
 
 ### 1. Graph and entity correlation
 
@@ -52,9 +52,12 @@ It then assigns entity-level suspicion using connected activity and shared infra
 The anomaly layer currently uses:
 
 - Isolation Forest
-- PCA-based feature projection/scoring
+- PCA reconstruction scoring
+- One-Class SVM
+- Autoencoder-style reconstruction baseline
+- Ensemble behavioral score over these baselines
 
-This layer focuses on unusual behavior patterns extracted from authentication and audit events.
+This layer focuses on unusual behavior patterns extracted from authentication and audit events, including failed-login velocity, burstiness, device novelty, country switching, MFA failure rate, and session reuse signals.
 
 ### 3. Attack classification
 
@@ -66,7 +69,15 @@ The attack-classification layer estimates attack labels such as:
 - account takeover
 - MFA bypass
 
-### 4. Analyst-facing explanation
+### 4. Temporal graph attribution baseline
+
+In addition to static correlation, the benchmark includes a lightweight temporal heterogeneous graph scorer:
+
+- recency-decayed edge weighting
+- mixed entity types (user, device, IP, country, session)
+- temporal volatility signal
+
+### 5. Analyst-facing explanation
 
 The product surface includes:
 
@@ -83,14 +94,20 @@ The LLM layer is optional explainability, not the core detector.
 The current offline benchmark compares:
 
 - `graph_only`
+- `dynamic_graph_temporal`
 - `graph_plus_anomaly`
+- `temporal_graph_plus_anomaly`
+- `graph_plus_anomaly_feedback`
 - `graph_plus_anomaly_llm`
 
 Interpretation:
 
-- `graph_only` tests whether simple relationship linking alone is enough
-- `graph_plus_anomaly` tests the fused detection path
-- `graph_plus_anomaly_llm` measures explanation coverage on top of the fused path
+- `graph_only` tests static linking only
+- `dynamic_graph_temporal` tests temporal graph-only scoring
+- `graph_plus_anomaly` tests static graph plus anomaly fusion
+- `temporal_graph_plus_anomaly` tests temporal graph plus anomaly fusion
+- `graph_plus_anomaly_feedback` applies analyst-confirmation feedback weights
+- `graph_plus_anomaly_llm` measures explanation coverage on top of fused detection
 
 Important:
 The current `graph_plus_anomaly_llm` mode does not change the detection threshold. It evaluates explanation coverage separately.
@@ -106,6 +123,8 @@ The current evaluation framework measures:
 - false positives
 - case studies
 - adversarial robustness
+- time-window generalization (train on earlier windows, test on later windows)
+- cross-environment generalization (global enterprise, remote workforce, high MFA organization)
 
 The adversarial suite currently tests:
 
@@ -186,9 +205,9 @@ Use this framing:
 
 ### Baselines
 
-- add One-Class SVM
-- add an Autoencoder baseline
-- add stronger graph baselines or temporal baselines
+- add stronger temporal graph baselines beyond the current lightweight decayed graph
+- evaluate model calibration quality, not only thresholded detection metrics
+- test ranking quality (top-k precision / recall) for analyst triage queues
 
 ### Analysis
 

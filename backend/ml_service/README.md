@@ -1,68 +1,66 @@
 # SAIPS ML Reproducibility
 
-This folder contains the security-analytics models plus a small, reproducible benchmark harness for portfolio and research use.
+This folder contains the attribution ML pipeline, reproducible benchmark data, and evaluation scripts that feed `ml-evaluation.php`.
 
 ## What is here
 
-- `requirements.txt`: Python dependencies for the ML pipeline.
-- `train_models.py`: Trains the anomaly and attack models on the bundled synthetic benchmark training events.
-- `evaluate_models.py`: Runs case-level evaluation and ablation reporting.
-- `run_adversarial_suite.py`: Tests robustness under IP rotation, timing jitter, device spoofing, and MFA-noise mutations.
-- `feedback_labels.py`: Stores analyst labels for surfaced cases (`true_positive`, `false_positive`, `needs_review`).
-- `benchmark_dataset.py`: Builds the synthetic training and test dataset.
-- `benchmark_pipeline.py`: Shared evaluation helpers.
-- `feedback_store.py`: Persistent analyst-feedback store used by evaluation.
-- `report_utils.py`: Writes reusable JSON report files for the dashboard.
-- `reports/latest_training.json`: Latest training summary.
-- `reports/latest_evaluation.json`: Latest benchmark + ablation summary.
-- `reports/latest_adversarial.json`: Latest adversarial robustness summary.
-- `DATASET.md`: Documents how the benchmark data is generated.
-- `LIMITATIONS.md`: Records the current research and engineering limits honestly.
-- `../../ML_RESEARCH.md`: Research-facing framing for supervisor outreach and paper positioning.
+- `requirements.txt`: Python dependencies.
+- `train_models.py`: Trains anomaly + attack models.
+- `evaluate_models.py`: Main benchmark evaluation and report generator.
+- `run_adversarial_suite.py`: Adversarial robustness runs.
+- `time_window_eval.py`: Train-on-earlier / test-on-later temporal evaluation.
+- `cross_environment_eval.py`: Cross-environment generalization stress test.
+- `export_benchmark_version.py`: Exports versioned dataset files into `datasets/`.
+- `export_case_studies.py`: Exports top flagged cases as markdown reports.
+- `feedback_labels.py`: Analyst labeling CLI (`true_positive`, `false_positive`, `needs_review`).
+- `benchmark_dataset.py`: Dataset builder + loader for versioned files.
+- `benchmark_pipeline.py`: Shared scoring + ablation logic.
+- `dynamic_graph_model.py`: Lightweight temporal heterogeneous graph scorer.
+- `feedback_store.py`: Persistent analyst feedback store.
+- `report_utils.py`: Shared report writer.
+- `DATASET.md`: Dataset details.
+- `LIMITATIONS.md`: Honest current limits.
+- `../../ML_RESEARCH.md`: Research framing.
 
-## Quick start
+## Quick start (Windows)
 
-```bash
+```powershell
 cd backend/ml_service
-python -m pip install -r requirements.txt
-python train_models.py
-python evaluate_models.py
-python run_adversarial_suite.py
-python feedback_labels.py set account_takeover_travel true_positive --analyst lead_analyst
+py -3.11 -m pip install -r requirements.txt
+py -3.11 export_benchmark_version.py
+py -3.11 train_models.py
+py -3.11 evaluate_models.py
+py -3.11 run_adversarial_suite.py
+py -3.11 time_window_eval.py
+py -3.11 cross_environment_eval.py
+py -3.11 export_case_studies.py --top-n 5
 ```
 
-After running, open `../../ml-evaluation.php` in the app to review the latest results.
-You can also label cases directly in `../../attack-attribution.php` to feed the feedback-aware mode.
+Then open `../../ml-evaluation.php`.
 
-## Evaluation outputs
+## Generated reports
 
-`evaluate_models.py` reports:
+- `reports/latest_training.json`
+- `reports/latest_evaluation.json`
+- `reports/latest_adversarial.json`
+- `reports/latest_time_window_eval.json`
+- `reports/latest_cross_environment.json`
+- `reports/latest_dataset_export.json`
+- `reports/latest_case_study_export.json`
+- `reports/case_studies/*.md`
 
-- Precision
-- Recall
-- F1
-- ROC-AUC
-- False positives
-- Attack-classifier macro metrics
-- Case studies
-- Explanation quality metrics (attack/entity/focus alignment)
-- Feedback-aware ablation mode:
-  - `graph_plus_anomaly_feedback`
-- Anomaly baseline comparison for:
-  - `isolation_forest`
-  - `pca_reconstruction`
-  - `one_class_svm`
-  - `autoencoder`
-  - `behavioral_ensemble`
-- Ablation outputs for:
-  - `graph_only`
-  - `graph_plus_anomaly`
-  - `graph_plus_anomaly_llm`
+## Evaluation coverage
+
+- Metrics: precision, recall, F1, ROC-AUC, false positives.
+- Baselines: `isolation_forest`, `pca_reconstruction`, `one_class_svm`, `autoencoder`, `behavioral_ensemble`.
+- Attribution modes: `graph_only`, `dynamic_graph_temporal`, `graph_plus_anomaly`, `temporal_graph_plus_anomaly`, `graph_plus_anomaly_feedback`, `graph_plus_anomaly_llm`.
+- Adversarial scenarios: IP rotation, timing jitter, device spoofing, MFA failure noise.
+- Explanation quality comparison: local explanations vs LLM explanations.
+- Case-study export: top flagged incidents in markdown for portfolio/research evidence.
 
 ## Notes
 
-- The benchmark is synthetic and reproducible, not production traffic.
-- The feedback loop is file-backed in `reports/analyst_feedback.json` so it is portable in local demo environments.
-- The third ablation mode keeps the same detection score as `graph_plus_anomaly` and measures explanation coverage separately. This is deliberate so the benchmark stays runnable offline.
-- Live LLM narratives in the web app are optional and depend on external provider access, quota, and API configuration.
-- The core attribution pipeline, evaluation scripts, and adversarial suite remain usable without paid model access because the product falls back to deterministic local explanations.
+- The benchmark is synthetic, reproducible, and intentionally small.
+- Versioned benchmark files live in `datasets/` and are loaded first when available.
+- Feedback labels are file-backed at `reports/analyst_feedback.json`.
+- LLM narratives are optional; the deterministic local explanation path is always available.

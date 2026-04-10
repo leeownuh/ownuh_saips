@@ -7,6 +7,7 @@ from sklearn.metrics import precision_recall_fscore_support, roc_auc_score
 from anomaly_detector import AnomalyDetector
 from attack_detector import AdversarialAttackDetector
 from benchmark_dataset import build_benchmark_dataset
+from dynamic_graph_model import TemporalGraphAttributionModel
 from entity_correlation import EntityCorrelationGraph
 from feedback_store import feedback_summary, list_feedback
 
@@ -21,7 +22,9 @@ ANOMALY_BASELINES = [
 
 PIPELINE_MODES = [
     "graph_only",
+    "dynamic_graph_temporal",
     "graph_plus_anomaly",
+    "temporal_graph_plus_anomaly",
     "graph_plus_anomaly_feedback",
     "graph_plus_anomaly_llm",
 ]
@@ -50,7 +53,8 @@ def load_or_train_detectors(model_dir: str | None = None) -> Tuple[AnomalyDetect
 
 def evaluate_dataset(cases: List[Dict[str, Any]], anomaly: AnomalyDetector, attack: AdversarialAttackDetector) -> Dict[str, Any]:
     feedback_map = list_feedback()
-    results = [evaluate_case(case, anomaly, attack, feedback_map) for case in cases]
+    temporal_graph = TemporalGraphAttributionModel(half_life_hours=18.0)
+    results = [evaluate_case(case, anomaly, attack, feedback_map, temporal_graph) for case in cases]
     malicious = [result for result in results if result["label"] == 1]
     attack_truth = [result["attack_type"] for result in malicious]
     attack_pred = [result["predicted_attack_type"] for result in malicious]
@@ -69,7 +73,9 @@ def evaluate_dataset(cases: List[Dict[str, Any]], anomaly: AnomalyDetector, atta
         },
         "modes": {
             "graph_only": mode_metrics(results, "graph_only"),
+            "dynamic_graph_temporal": mode_metrics(results, "dynamic_graph_temporal"),
             "graph_plus_anomaly": mode_metrics(results, "graph_plus_anomaly"),
+            "temporal_graph_plus_anomaly": mode_metrics(results, "temporal_graph_plus_anomaly"),
             "graph_plus_anomaly_feedback": mode_metrics(results, "graph_plus_anomaly_feedback"),
             "graph_plus_anomaly_llm": {
                 **mode_metrics(results, "graph_plus_anomaly_llm"),
@@ -86,7 +92,14 @@ def evaluate_dataset(cases: List[Dict[str, Any]], anomaly: AnomalyDetector, atta
             "evaluated_positive_cases": len(malicious),
         },
         "feedback": feedback_summary(),
-        "explanation_quality": explanation_quality_metrics(results),
+        "explanation_quality": {
+            "local": explanation_quality_metrics(results, "local_explanation"),
+            "llm": explanation_quality_metrics(results, "llm_explanation"),
+            "delta_over_local": explanation_quality_delta(
+                explanation_quality_metrics(results, "local_explanation"),
+                explanation_quality_metrics(results, "llm_explanation"),
+            ),
+        },
         "case_studies": sorted(results, key=lambda result: result["graph_plus_anomaly_score"], reverse=True)[:4],
     }
 
@@ -96,6 +109,7 @@ def evaluate_case(
     anomaly: AnomalyDetector,
     attack: AdversarialAttackDetector,
     feedback_map: Dict[str, Dict[str, Any]] | None = None,
+    temporal_graph: TemporalGraphAttributionModel | None = None,
 ) -> Dict[str, Any]:
     events = case["events"]
     anomaly_result = anomaly.predict(events)
@@ -122,6 +136,7 @@ def evaluate_case(
             default=0.0,
         ),
     )
+    dynamic_graph_score = temporal_graph.score_case(events, expected_entities=expected_entities) if temporal_graph else 0.0
 
     attack_candidates = [
         item for item in attack_result["attacks"]
@@ -152,9 +167,18 @@ def evaluate_case(
         ),
         4,
     )
+    temporal_signal = temporal_behavior_signal(focus_user)
+    temporal_graph_plus_anomaly_score = round(
+        max(
+            (dynamic_graph_score * 0.55) + (anomaly_scores["behavioral_ensemble"] * 0.45),
+            (graph_plus_anomaly_score * 0.85) + (temporal_signal * 0.15),
+        ),
+        4,
+    )
     label_entry = (feedback_map or {}).get(case["case_id"], {})
     adjustment_multiplier = feedback_multiplier_from_label(str(label_entry.get("label", "")))
     graph_plus_anomaly_feedback_score = round(min(1.0, max(0.0, graph_plus_anomaly_score * adjustment_multiplier)), 4)
+    local_explanation = build_local_explanation(case, top_attack["attack_type"], graph_plus_anomaly_score, graph_hits, focus_user)
     llm_explanation = build_llm_explanation(case, top_attack["attack_type"], graph_plus_anomaly_score, graph_hits)
 
     result: Dict[str, Any] = {
@@ -167,17 +191,23 @@ def evaluate_case(
         "anomaly_hits": [item["user_id"] for item in anomaly_result.get("anomalies", [])],
         "behavioral_focus_user": focus_user.get("user_id", expected_user),
         "behavioral_drivers": top_behavioral_drivers(focus_user),
+        "local_explanation": local_explanation,
         "llm_explanation": llm_explanation,
         "graph_only_score": graph_only_score,
         "graph_only_pred": int(graph_only_score >= 0.55),
+        "dynamic_graph_temporal_score": round(float(dynamic_graph_score), 4),
+        "dynamic_graph_temporal_pred": int(dynamic_graph_score >= 0.55),
         "graph_plus_anomaly_score": graph_plus_anomaly_score,
         "graph_plus_anomaly_pred": int(graph_plus_anomaly_score >= 0.55),
+        "temporal_graph_plus_anomaly_score": temporal_graph_plus_anomaly_score,
+        "temporal_graph_plus_anomaly_pred": int(temporal_graph_plus_anomaly_score >= 0.55),
         "graph_plus_anomaly_feedback_score": graph_plus_anomaly_feedback_score,
         "graph_plus_anomaly_feedback_pred": int(graph_plus_anomaly_feedback_score >= 0.55),
         "graph_plus_anomaly_llm_score": graph_plus_anomaly_score,
         "graph_plus_anomaly_llm_pred": int(graph_plus_anomaly_score >= 0.55),
         "feedback_label": str(label_entry.get("label", "unlabeled")),
         "feedback_multiplier": round(float(adjustment_multiplier), 4),
+        "temporal_signal": round(float(temporal_signal), 4),
     }
 
     for model, score in anomaly_scores.items():
@@ -240,7 +270,37 @@ def build_llm_explanation(case: Dict[str, Any], predicted_attack: str, score: fl
     )
 
 
-def explanation_quality_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+def build_local_explanation(
+    case: Dict[str, Any],
+    predicted_attack: str,
+    score: float,
+    graph_hits: List[Dict[str, Any]],
+    focus_user: Dict[str, Any],
+) -> str:
+    top_drivers = top_behavioral_drivers(focus_user)
+    driver_clause = ", ".join(driver["feature"] for driver in top_drivers[:3]) if top_drivers else "behavioral anomalies"
+    entity_clause = ", ".join(entity["entity_id"] for entity in graph_hits) if graph_hits else "graph neighbourhood links"
+    return (
+        f"Case {case['case_id']} shows {predicted_attack} traits with score {score:.2f}. "
+        f"Primary evidence came from {entity_clause} and temporal/behavioral drivers ({driver_clause})."
+    )
+
+
+def temporal_behavior_signal(scored_user: Dict[str, Any]) -> float:
+    features = scored_user.get("behavioral_features", {})
+    velocity = float(features.get("failed_login_velocity_10m", 0.0))
+    burst = float(features.get("burst_5min_peak", 0.0))
+    recent_fail_ratio = float(features.get("recent_30m_failure_ratio", 0.0))
+    risk_trend = float(features.get("risk_trend_slope", 0.0))
+
+    velocity_n = min(1.0, velocity / 0.4)
+    burst_n = min(1.0, burst / 5.0)
+    recent_fail_n = min(1.0, recent_fail_ratio)
+    risk_trend_n = min(1.0, max(0.0, risk_trend / 20.0))
+    return (velocity_n * 0.3) + (burst_n * 0.25) + (recent_fail_n * 0.25) + (risk_trend_n * 0.2)
+
+
+def explanation_quality_metrics(results: List[Dict[str, Any]], explanation_key: str) -> Dict[str, Any]:
     if not results:
         return {
             "attack_alignment": 0.0,
@@ -253,7 +313,7 @@ def explanation_quality_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]
     entity_hits = 0
     focus_hits = 0
     for result in results:
-        explanation = str(result.get("llm_explanation", "")).lower()
+        explanation = str(result.get(explanation_key, "")).lower()
         predicted_attack = str(result.get("predicted_attack_type", "")).lower()
         focus_user = str(result.get("behavioral_focus_user", "")).lower()
         graph_hits = [str(item).lower() for item in result.get("graph_hits", [])]
@@ -285,6 +345,15 @@ def explanation_quality_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]
         "entity_alignment": round(float(entity_alignment), 4),
         "focus_user_alignment": round(float(focus_alignment), 4),
         "overall": round(float(overall), 4),
+    }
+
+
+def explanation_quality_delta(local_metrics: Dict[str, Any], llm_metrics: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "overall_delta": round(float(llm_metrics.get("overall", 0.0)) - float(local_metrics.get("overall", 0.0)), 4),
+        "attack_alignment_delta": round(float(llm_metrics.get("attack_alignment", 0.0)) - float(local_metrics.get("attack_alignment", 0.0)), 4),
+        "entity_alignment_delta": round(float(llm_metrics.get("entity_alignment", 0.0)) - float(local_metrics.get("entity_alignment", 0.0)), 4),
+        "focus_alignment_delta": round(float(llm_metrics.get("focus_user_alignment", 0.0)) - float(local_metrics.get("focus_user_alignment", 0.0)), 4),
     }
 
 
