@@ -61,6 +61,7 @@ function nav_active(string $href, string $current): string {
                         <li class="slide"><a href="ips-blocked-ips.php" class="side-menu__item" role="menuitem">Blocked IPs</a></li>
                         <li class="slide"><a href="ips-brute-force.php" class="side-menu__item" role="menuitem">Brute-Force Alerts</a></li>
                         <li class="slide"><a href="attack-attribution.php" class="side-menu__item <?= nav_active('attack-attribution.php', $current_page) ?>" role="menuitem">Attack Attribution</a></li>
+                        <li class="slide"><a href="ml-evaluation.php" class="side-menu__item <?= nav_active('ml-evaluation.php', $current_page) ?>" role="menuitem">ML Evaluation</a></li>
                         <li class="slide"><a href="ips-geo-block.php" class="side-menu__item" role="menuitem">Geo-Block Rules</a></li>
                         <li class="slide"><a href="ips-rate-limits.php" class="side-menu__item" role="menuitem">Rate Limit Config</a></li>
                     </ul>

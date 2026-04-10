@@ -33,10 +33,22 @@ This repository now includes a complete, defensible AI/ML security-analysis lane
   Reports precision, recall, F1, ROC-AUC, false positives, attack metrics, case studies, and pipeline ablations.
 - `backend/ml_service/run_adversarial_suite.py`
   Stress-tests the pipeline under IP rotation, timing jitter, device spoofing, and MFA-failure noise.
+- `backend/ml_service/feedback_labels.py`
+  CLI helper for analyst labeling (`true_positive`, `false_positive`, `needs_review`) to support feedback-aware ranking.
+- `backend/ml_service/feedback_store.py`
+  File-backed feedback state used by benchmark evaluation and dashboard summaries.
 - `backend/ml_service/benchmark_dataset.py`
   Synthetic benchmark dataset generator.
 - `backend/ml_service/benchmark_pipeline.py`
   Shared evaluation and ablation logic.
+- `backend/ml_service/report_utils.py`
+  Writes reproducible JSON report artifacts consumed by the dashboard.
+- `backend/ml_service/reports/latest_training.json`
+  Last training run summary for dashboard display.
+- `backend/ml_service/reports/latest_evaluation.json`
+  Last benchmark/ablation run summary for dashboard display.
+- `backend/ml_service/reports/latest_adversarial.json`
+  Last adversarial robustness run summary for dashboard display.
 - `backend/ml_service/DATASET.md`
   Honest description of the bundled benchmark data.
 - `backend/ml_service/LIMITATIONS.md`
@@ -45,6 +57,8 @@ This repository now includes a complete, defensible AI/ML security-analysis lane
   Quick-start guide for the ML reproducibility folder.
 - `ML_RESEARCH.md`
   Research-facing framing: problem statement, method, baselines, claims, and next-step agenda.
+- `ml-evaluation.php`
+  In-app evaluation dashboard that surfaces anomaly baseline metrics, pipeline ablation, adversarial robustness, case studies, explanation quality, and analyst-feedback summaries.
 
 ## Research storyline
 
@@ -70,6 +84,8 @@ That is much closer to Dr. Choo's research direction than adding a chatbot or un
 3. Open `attack-attribution.php`.
 4. Adjust the date window and event limit.
 5. Optionally enable `LLM mode` if an OpenAI-compatible key is configured in `backend/config/.env` and the provider has available quota.
+6. Label cases directly in `attack-attribution.php` as `true_positive`, `false_positive`, or `needs_review` to populate the feedback loop.
+7. Open `ml-evaluation.php` to review saved benchmark, feedback-aware, and adversarial metrics.
 
 Notes:
 
@@ -95,6 +111,15 @@ python run_adversarial_suite.py
 - False positives
 - Attack-classifier macro metrics
 - Case studies
+- Explanation quality metrics
+- Feedback-aware mode:
+  - `graph_plus_anomaly_feedback`
+- Anomaly baseline comparison for:
+  - `isolation_forest`
+  - `pca_reconstruction`
+  - `one_class_svm`
+  - `autoencoder`
+  - `behavioral_ensemble`
 - Ablation outputs for:
   - `graph_only`
   - `graph_plus_anomaly`

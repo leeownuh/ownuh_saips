@@ -51,6 +51,84 @@ function attribution_present_value(mixed $value): string {
     return attribution_safe_text((string)$value);
 }
 
+function attribution_feedback_file(): string {
+    return __DIR__ . '/backend/ml_service/reports/analyst_feedback.json';
+}
+
+function attribution_feedback_labels(): array {
+    return ['true_positive', 'false_positive', 'needs_review'];
+}
+
+function attribution_load_feedback_map(): array {
+    $path = attribution_feedback_file();
+    if (!is_file($path)) {
+        return [];
+    }
+    $raw = file_get_contents($path);
+    if ($raw === false || trim($raw) === '') {
+        return [];
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $cases = $decoded['cases'] ?? [];
+    return is_array($cases) ? $cases : [];
+}
+
+function attribution_save_feedback_entry(string $caseId, string $label, string $note, string $analyst): bool {
+    $label = strtolower(trim($label));
+    if (!in_array($label, attribution_feedback_labels(), true)) {
+        return false;
+    }
+
+    $path = attribution_feedback_file();
+    $dir = dirname($path);
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        return false;
+    }
+
+    $payload = ['cases' => []];
+    if (is_file($path)) {
+        $raw = file_get_contents($path);
+        if ($raw !== false && trim($raw) !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $payload = $decoded;
+                if (!isset($payload['cases']) || !is_array($payload['cases'])) {
+                    $payload['cases'] = [];
+                }
+            }
+        }
+    }
+
+    $payload['cases'][$caseId] = [
+        'label' => $label,
+        'note' => trim($note),
+        'analyst' => trim($analyst) !== '' ? trim($analyst) : 'analyst',
+        'updated_at' => date('c'),
+    ];
+    $payload['updated_at'] = date('c');
+    $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    if ($json === false) {
+        return false;
+    }
+
+    return file_put_contents($path, $json, LOCK_EX) !== false;
+}
+
+function attribution_feedback_badge_class(string $label): string {
+    return match (strtolower($label)) {
+        'true_positive' => 'success',
+        'false_positive' => 'danger',
+        default => 'warning',
+    };
+}
+
+function attribution_feedback_label_text(string $label): string {
+    return ucwords(str_replace('_', ' ', strtolower($label)));
+}
+
 function next_incident_ref(Database $db): string {
     $year = date('Y');
     $last = (int)$db->fetchScalar(
@@ -118,6 +196,7 @@ $dateTo = $filters['to_date'] !== '' ? $filters['to_date'] . ' 23:59:59' : null;
 $analysis = (new MLService($db))->analyzeAttackAttribution($dateFrom, $dateTo, $filters['limit'], $filters['with_llm']);
 $success = null;
 $error = null;
+$feedbackMap = attribution_load_feedback_map();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_attribution_incident') {
     if (!verify_csrf($_POST['csrf_token'] ?? '')) {
@@ -130,6 +209,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             $error = 'The selected attribution case could not be found.';
         } else {
             $success = 'Incident ' . create_attribution_incident($db, $case, (string)($user['sub'] ?? '')) . ' created from attribution case.';
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_case_feedback') {
+    if (!verify_csrf($_POST['csrf_token'] ?? '')) {
+        $error = 'Security validation failed. Please refresh and try again.';
+    } elseif (($analysis['status'] ?? '') !== 'success') {
+        $error = 'Attribution results were unavailable, so feedback could not be saved.';
+    } else {
+        $caseId = trim((string)($_POST['case_id'] ?? ''));
+        $label = trim((string)($_POST['feedback_label'] ?? 'needs_review'));
+        $note = trim((string)($_POST['feedback_note'] ?? ''));
+        $case = attribution_case_by_id($analysis['cases'] ?? [], $caseId);
+
+        if ($case === null) {
+            $error = 'The selected attribution case could not be found.';
+        } elseif (!in_array(strtolower($label), attribution_feedback_labels(), true)) {
+            $error = 'Feedback label is invalid.';
+        } else {
+            $analyst = (string)($user['email'] ?? ($user['sub'] ?? 'analyst'));
+            if (attribution_save_feedback_entry($caseId, $label, $note, $analyst)) {
+                $success = 'Feedback saved for case ' . $caseId . '.';
+                $feedbackMap = attribution_load_feedback_map();
+            } else {
+                $error = 'Unable to save feedback at this time.';
+            }
         }
     }
 }
@@ -281,6 +387,13 @@ $networkSnapshot = attribution_network_snapshot($cases);
                     $attackLabel = str_replace('_', ' ', (string)($case['attack_label'] ?? ''));
                     $collapseId = 'case-' . $index;
                     $linkCounts = attribution_case_link_counts($case);
+                    $feedbackEntry = $feedbackMap[(string)($case['case_id'] ?? '')] ?? null;
+                    $feedbackLabel = is_array($feedbackEntry)
+                        ? strtolower((string)($feedbackEntry['label'] ?? 'needs_review'))
+                        : 'needs_review';
+                    $feedbackNote = is_array($feedbackEntry) ? (string)($feedbackEntry['note'] ?? '') : '';
+                    $feedbackClass = attribution_feedback_badge_class($feedbackLabel);
+                    $feedbackText = attribution_feedback_label_text($feedbackLabel);
                     ?>
                     <div class="accordion-item mb-3 border rounded-3 overflow-hidden">
                         <h2 class="accordion-header" id="heading-<?= esc((string)$index) ?>">
@@ -288,6 +401,7 @@ $networkSnapshot = attribution_network_snapshot($cases);
                                 <span class="me-3 fw-semibold"><?= esc($entityLabel) ?></span>
                                 <span class="badge bg-light text-dark border me-2"><?= esc($attackLabel) ?></span>
                                 <span class="badge bg-danger-subtle text-danger border border-danger me-2"><?= esc((string)($case['severity'] ?? 'sev3')) ?></span>
+                                <span class="badge bg-<?= esc($feedbackClass) ?>-subtle text-<?= esc($feedbackClass) ?> border border-<?= esc($feedbackClass) ?> me-2"><?= esc($feedbackText) ?></span>
                                 <span class="text-muted small">Risk <?= esc((string)($case['risk_score'] ?? 0)) ?></span>
                             </button>
                         </h2>
@@ -341,6 +455,36 @@ $networkSnapshot = attribution_network_snapshot($cases);
                                         <h6 class="fw-semibold mb-2">Evidence</h6>
                                         <div class="list-group list-group-flush mb-3">
                                             <?php foreach (($case['evidence'] ?? []) as $label => $value): ?><div class="list-group-item px-0 d-flex justify-content-between gap-3"><span class="text-muted"><?= esc(ucwords(str_replace('_', ' ', (string)$label))) ?></span><span class="fw-semibold text-end"><?= esc(attribution_present_value($value)) ?></span></div><?php endforeach; ?>
+                                        </div>
+                                        <div class="card border-0 bg-light-subtle mb-3">
+                                            <div class="card-body">
+                                                <h6 class="fw-semibold mb-2">Analyst Feedback</h6>
+                                                <div class="small text-muted mb-3">Label this case so future evaluation can separate true incidents from false positives.</div>
+                                                <form method="POST" class="row g-2">
+                                                    <input type="hidden" name="csrf_token" value="<?= esc($csrf) ?>">
+                                                    <input type="hidden" name="action" value="save_case_feedback">
+                                                    <input type="hidden" name="case_id" value="<?= esc((string)($case['case_id'] ?? '')) ?>">
+                                                    <input type="hidden" name="from_date" value="<?= esc($filters['from_date']) ?>">
+                                                    <input type="hidden" name="to_date" value="<?= esc($filters['to_date']) ?>">
+                                                    <input type="hidden" name="limit" value="<?= esc((string)$filters['limit']) ?>">
+                                                    <input type="hidden" name="with_llm" value="<?= $filters['with_llm'] ? '1' : '0' ?>">
+                                                    <div class="col-12">
+                                                        <label class="form-label mb-1 small">Label</label>
+                                                        <select class="form-select form-select-sm" name="feedback_label">
+                                                            <?php foreach (attribution_feedback_labels() as $candidate): ?>
+                                                                <option value="<?= esc($candidate) ?>" <?= $feedbackLabel === $candidate ? 'selected' : '' ?>><?= esc(attribution_feedback_label_text($candidate)) ?></option>
+                                                            <?php endforeach; ?>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-12">
+                                                        <label class="form-label mb-1 small">Note</label>
+                                                        <textarea class="form-control form-control-sm" name="feedback_note" rows="2" placeholder="Why this label?"><?= esc($feedbackNote) ?></textarea>
+                                                    </div>
+                                                    <div class="col-12 d-grid">
+                                                        <button type="submit" class="btn btn-outline-primary btn-sm"><i class="ri-save-3-line me-1"></i>Save Feedback</button>
+                                                    </div>
+                                                </form>
+                                            </div>
                                         </div>
                                         <?php if (!empty($case['related_incidents'])): ?>
                                             <h6 class="fw-semibold mb-2">Linked Incidents</h6>

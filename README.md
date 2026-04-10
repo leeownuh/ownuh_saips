@@ -290,6 +290,9 @@ Once configured, new login events will log Country + Region without hitting exte
 - Stored executive report history with cadence and attachment preferences
 - A graph-based attack-attribution dashboard that visually links users, devices, IPs, and incidents
 - Optional LLM analyst narratives on the attack-attribution screen, without making live model access a requirement for the core pipeline
+- In-page analyst feedback labeling on the attack-attribution dashboard (`true_positive`, `false_positive`, `needs_review`) for Level-2 evaluation loops
+- An ML evaluation dashboard that surfaces anomaly baseline comparison, pipeline ablation, adversarial robustness, and case studies from reproducible JSON reports
+- A Level-2 research lane with temporal behavioral features, explanation-quality scoring, and analyst feedback labels that influence evaluation ranking
 
 ### Alerting And Operator Experience
 
@@ -311,7 +314,7 @@ Once configured, new login events will log Country + Region without hitting exte
 - IPS pages now match the current database schema and failed login attempts are recorded for brute-force reporting
 - Timestamps and dashboard clocks now display as IST by default
 - `settings-compliance.php` can generate an AI executive report summarizing organisation posture
-- `executive-report-export.php` exports the executive report as HTML or PDF
+- `executive-report-export.php` exports the executive report as HTML or PDF.
 - `backend/scripts/send-weekly-executive-report.php` can email a weekly posture brief to admins
 - Executive reporting now stores history entries for manual generation, exports, and scheduled email runs
 - The alert-rule pipeline now dispatches real email notifications for wired security and incident events instead of acting as UI-only configuration
@@ -344,6 +347,8 @@ Once configured, new login events will log Country + Region without hitting exte
 - `settings-compliance.php` - compliance posture plus AI executive reporting
 - `executive-report-export.php` - HTML/PDF export endpoint for executive reports
 - `attack-attribution.php` - graph-based attack attribution with relationship-link visuals, local explanations, and optional LLM triage narratives
+- `attack-attribution.php` also supports analyst feedback labels that feed Level-2 feedback-aware evaluation reports
+- `ml-evaluation.php` - model training/evaluation/adversarial metrics dashboard for the attribution pipeline
 - `auth-signup.php` - shared-shell signup flow using the live registration API
 - `auth-401.php`, `auth-404.php`, `auth-500.php`, `under-maintenance.php` - shared-shell utility/error pages
 - `ips-blocked-ips.php` - blocked IP administration

@@ -6,6 +6,8 @@ from typing import Any, Dict, List
 
 from benchmark_dataset import build_benchmark_dataset, clone_cases
 from benchmark_pipeline import evaluate_dataset, load_or_train_detectors
+from feedback_store import feedback_summary
+from report_utils import save_json_report
 
 
 def mutate_ip_rotation(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -74,7 +76,18 @@ def main() -> None:
     for name, metrics in scenarios.items():
         metrics["recall_delta_vs_baseline"] = round(float(metrics["recall"]) - float(baseline_recall), 4)
 
-    print(json.dumps({"mode": "graph_plus_anomaly", "scenarios": scenarios}, indent=2))
+    report = {
+        "mode": "graph_plus_anomaly",
+        "scenarios": scenarios,
+        "feedback": feedback_summary(),
+        "dataset": {
+            "test_cases": len(dataset["test_cases"]),
+            "positive_cases": sum(case["label"] for case in dataset["test_cases"]),
+            "negative_cases": sum(1 for case in dataset["test_cases"] if case["label"] == 0),
+        },
+    }
+    report["report_path"] = save_json_report("latest_adversarial.json", report)
+    print(json.dumps(report, indent=2))
 
 
 if __name__ == "__main__":

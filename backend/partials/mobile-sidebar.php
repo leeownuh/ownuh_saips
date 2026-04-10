@@ -34,6 +34,7 @@
                                 <li class="slide"><a href="ips-blocked-ips.php" class="side-menu__item">Blocked IPs</a></li>
                                 <li class="slide"><a href="ips-brute-force.php" class="side-menu__item">Brute-Force Alerts</a></li>
                                 <li class="slide"><a href="attack-attribution.php" class="side-menu__item">Attack Attribution</a></li>
+                                <li class="slide"><a href="ml-evaluation.php" class="side-menu__item">ML Evaluation</a></li>
                                 <li class="slide"><a href="ips-geo-block.php" class="side-menu__item">Geo-Block Rules</a></li>
                                 <li class="slide"><a href="ips-rate-limits.php" class="side-menu__item">Rate Limit Config</a></li>
                             </ul>
