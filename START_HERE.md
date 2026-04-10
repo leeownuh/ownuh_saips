@@ -57,6 +57,10 @@ This repository now includes a complete, defensible AI/ML security-analysis lane
   Quick-start guide for the ML reproducibility folder.
 - `ML_RESEARCH.md`
   Research-facing framing: problem statement, method, baselines, claims, and next-step agenda.
+- `docs/research/LEVEL2_RESEARCH_BRIEF.md`
+  One-stop Level 2 brief with objective, method, metrics, limits, and next experiments.
+- `docs/application/DR_CHOO_OUTREACH_PACK.md`
+  Paste-ready CV bullets, LinkedIn copy, email draft, and SOP paragraph for supervisor outreach.
 - `ml-evaluation.php`
   In-app evaluation dashboard that surfaces anomaly baseline metrics, pipeline ablation, adversarial robustness, case studies, explanation quality, and analyst-feedback summaries.
 

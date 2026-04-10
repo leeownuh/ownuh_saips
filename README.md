@@ -428,3 +428,5 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for:
 Also see:
 - `ARCHITECTURE.md` for component boundaries and auth/MFA/reset design
 - `KNOWN_LIMITATIONS.md` for honest demo-vs-production tradeoffs
+- `docs/research/LEVEL2_RESEARCH_BRIEF.md` for the Level 2 research summary and metrics framing
+- `docs/application/DR_CHOO_OUTREACH_PACK.md` for supervisor-outreach ready CV/email/SOP text
