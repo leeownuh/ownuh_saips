@@ -1,5 +1,7 @@
 # Limitations
 
+Updated: April 10, 2026
+
 ## Data limits
 
 - The benchmark dataset is synthetic and intentionally small.
@@ -19,10 +21,12 @@
 - The `graph_plus_anomaly_llm` benchmark mode evaluates explanation coverage separately; it does not currently change the detection threshold.
 - Live LLM narratives and executive reports depend on external provider access, available quota, and structured-output reliability.
 - When that provider layer is unavailable, the product degrades to deterministic local summaries instead of blocking the workflow.
+- Time-window and cross-environment evaluations are implemented, but they still run on the same small synthetic benchmark family.
 
 ## Research next steps
 
 - Replace synthetic labels with analyst-verified case labels.
-- Add temporal validation over longer windows.
+- Extend temporal validation over longer windows and higher event volume.
 - Add feature ablations per model, not just pipeline-level ablations.
 - Add calibration checks and analyst feedback loops.
+- Add attack-type error analysis and ranking-quality metrics (top-k triage performance).

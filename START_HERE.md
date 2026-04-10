@@ -2,6 +2,10 @@
 
 This repository now includes a complete, defensible AI/ML security-analysis lane built around attack attribution rather than generic "AI features."
 
+Documentation map:
+
+- `docs/README.md` (quick index for research, application, and reproducibility docs)
+
 ## What is actually in the repo
 
 ### Product-facing ML integration
@@ -77,6 +81,8 @@ This repository now includes a complete, defensible AI/ML security-analysis lane
   Research-facing framing: problem statement, method, baselines, claims, and next-step agenda.
 - `docs/research/LEVEL2_RESEARCH_BRIEF.md`
   One-stop Level 2 brief with objective, method, metrics, limits, and next experiments.
+- `docs/research/RESULTS_SNAPSHOT_2026-04-10.md`
+  Frozen run snapshot with reproducible metrics from the latest benchmark execution.
 - `docs/application/DR_CHOO_OUTREACH_PACK.md`
   Paste-ready CV bullets, LinkedIn copy, email draft, and SOP paragraph for supervisor outreach.
 - `ml-evaluation.php`
